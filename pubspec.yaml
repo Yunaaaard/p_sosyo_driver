@@ -42,3 +42,7 @@ flutter:
           weight: 600
         - asset: assets/fonts/Poppins-Bold.ttf
           weight: 700
+    - family: ITTENOVIANADEMO
+      fonts:
+        - asset: assets/fonts/ITTENOVIANADEMO-Regular.otf
+          weight: 500

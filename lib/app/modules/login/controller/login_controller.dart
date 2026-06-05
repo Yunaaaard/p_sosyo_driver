@@ -50,7 +50,7 @@ class LoginController extends GetxController {
 	}
 
 	void submitLogin() {
-		Get.offAllNamed(AppRoutes.home);
+		Get.toNamed(AppRoutes.pinVerification);
 	}
 
 	@override

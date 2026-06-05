@@ -67,7 +67,7 @@ class LoginPage extends GetView<LoginController> {
                           label: 'Let\'s Start',
                           onPressed: controller.submitLogin,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 5),
                       ],
                     ),
                   ),
@@ -80,7 +80,6 @@ class LoginPage extends GetView<LoginController> {
     );
   }
 
-  /// Logo + welcome text — collapses when keyboard is visible.
   Widget _buildHeader(bool isKeyboardVisible) {
     return AnimatedSize(
       duration: const Duration(milliseconds: 200),
