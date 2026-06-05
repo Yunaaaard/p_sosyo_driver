@@ -4,4 +4,5 @@ class AppRoutes {
   static const String home = '/home';
   static const String details = '/otp';
   static const String pinVerification = '/pin-verification';
+  static const String orderDetails = '/order-details';
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
 import 'package:p_sosyo_driver/app/modules/home/controller/home_controller.dart';
+import 'package:p_sosyo_driver/app/routes/app_routes.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_appBar.dart';
 
 class HomePage extends GetView<HomeController> {
@@ -98,15 +100,24 @@ class HomePage extends GetView<HomeController> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            value,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF6533E7),
-            ),
-          ),
+          value.contains('₱')
+              ? Text.rich(
+                  PesoFormatter.buildPesoTextSpan(
+                    amount: value.replaceAll('₱', '').trim(),
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF6533E7),
+                  ),
+                )
+              : Text(
+                  value,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF6533E7),
+                  ),
+                ),
         ],
       ),
     );
@@ -235,7 +246,7 @@ class HomePage extends GetView<HomeController> {
                 ],
               ),
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () => Get.toNamed(AppRoutes.orderDetails),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6533E7),
                   foregroundColor: Colors.white,
@@ -361,15 +372,24 @@ class HomePage extends GetView<HomeController> {
             ),
           ),
           const Spacer(),
-          Text(
-            value,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF2F333A),
-            ),
-          ),
+          value.contains('₱')
+              ? Text.rich(
+                  PesoFormatter.buildPesoTextSpan(
+                    amount: value.replaceAll('₱', '').trim(),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF2F333A),
+                  ),
+                )
+              : Text(
+                  value,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF2F333A),
+                  ),
+                ),
         ],
       ),
     );

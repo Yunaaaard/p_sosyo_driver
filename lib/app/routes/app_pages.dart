@@ -7,6 +7,8 @@ import 'package:p_sosyo_driver/app/modules/login/bindings/login_binding.dart';
 import 'package:p_sosyo_driver/app/modules/login/views/login_page.dart';
 import 'package:p_sosyo_driver/app/modules/otp_verification/bindings/pin_verification_binding.dart';
 import 'package:p_sosyo_driver/app/modules/otp_verification/views/pin_verification.dart';
+import 'package:p_sosyo_driver/app/modules/order_details/bindings/order_details_binding.dart';
+import 'package:p_sosyo_driver/app/modules/order_details/views/order_details.dart';
 import 'app_routes.dart';
 
 class AppPages {
@@ -31,5 +33,10 @@ class AppPages {
       page: () => const PinVerificationPage(),
       binding: PinVerificationBinding(),
     ),
+    GetPage(
+      name: AppRoutes.orderDetails,
+      page: () => const OrderDetailsPage(),
+      binding: OrderDetailsBinding(),
+    ),
   ];
-}
+}
