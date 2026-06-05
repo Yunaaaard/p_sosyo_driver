@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
 import 'package:p_sosyo_driver/app/modules/order_details/controller/order_details_controller.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_appBar.dart';
+import 'package:p_sosyo_driver/app/routes/app_routes.dart';
 
 class OrderDetailsPage extends GetView<OrderDetailsController> {
   const OrderDetailsPage({super.key});
@@ -40,7 +41,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
         color: const Color(0xFFF6F6F8),
         padding: const EdgeInsets.all(16),
         child: ElevatedButton(
-          onPressed: () {},
+          onPressed: () => Get.toNamed(AppRoutes.receiptDetails),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF6533E7),
             foregroundColor: Colors.white,
@@ -315,17 +316,6 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
 
   /// Builds customized product image placeholder or thumbnail icon.
   Widget _buildProductImage(String title) {
-    IconData iconData = Icons.shopping_bag_outlined;
-    final lowerTitle = title.toLowerCase();
-    if (lowerTitle.contains('coffee') ||
-        lowerTitle.contains('cappuccino') ||
-        lowerTitle.contains('nescafé') ||
-        lowerTitle.contains('nescafe')) {
-      iconData = Icons.local_cafe_outlined;
-    } else if (lowerTitle.contains('milk') || lowerTitle.contains('drink')) {
-      iconData = Icons.local_drink_outlined;
-    }
-
     return Container(
       width: 76,
       height: 76,
@@ -333,9 +323,9 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
         color: const Color(0xFFF2EFFF),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Icon(
-        iconData,
-        color: const Color(0xFF6533E7),
+      child: const Icon(
+        Icons.inventory_2_outlined,
+        color: Color(0xFF6533E7),
         size: 32,
       ),
     );

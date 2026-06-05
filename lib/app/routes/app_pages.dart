@@ -9,6 +9,10 @@ import 'package:p_sosyo_driver/app/modules/otp_verification/bindings/pin_verific
 import 'package:p_sosyo_driver/app/modules/otp_verification/views/pin_verification.dart';
 import 'package:p_sosyo_driver/app/modules/order_details/bindings/order_details_binding.dart';
 import 'package:p_sosyo_driver/app/modules/order_details/views/order_details.dart';
+import 'package:p_sosyo_driver/app/modules/receipt_details/bindings/receipt_details_binding.dart';
+import 'package:p_sosyo_driver/app/modules/receipt_details/views/receipt_details.dart';
+import 'package:p_sosyo_driver/app/modules/qr_scanner/bindings/qr_scanner_binding.dart';
+import 'package:p_sosyo_driver/app/modules/qr_scanner/views/qr_scanner_page.dart';
 import 'app_routes.dart';
 
 class AppPages {
@@ -37,6 +41,16 @@ class AppPages {
       name: AppRoutes.orderDetails,
       page: () => const OrderDetailsPage(),
       binding: OrderDetailsBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.receiptDetails,
+      page: () => const ReceiptDetailsPage(),
+      binding: ReceiptDetailsBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.qrScanner,
+      page: () => const QrScannerPage(),
+      binding: QrScannerBinding(),
     ),
   ];
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
+import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
 import 'package:p_sosyo_driver/app/modules/home/controller/home_controller.dart';
 import 'package:p_sosyo_driver/app/routes/app_routes.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_appBar.dart';
@@ -45,25 +46,34 @@ class HomePage extends GetView<HomeController> {
 
   /// Row showing "Sales Today" and "Delivered Orders" cards.
   Widget _buildStatsRow() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildStatCard(
-            icon: Icons.receipt_long_outlined,
-            title: 'Sales Today',
-            value: '₱ 23,893.12',
+    return Obx(() {
+      String formatSales(double value) {
+        final parts = value.toStringAsFixed(2).split('.');
+        final regExp = RegExp(r'\B(?=(\d{3})+(?!\d))');
+        parts[0] = parts[0].replaceAllMapped(regExp, (Match m) => ',');
+        return parts.join('.');
+      }
+
+      return Row(
+        children: [
+          Expanded(
+            child: _buildStatCard(
+              icon: Icons.receipt_long_outlined,
+              title: 'Sales Today',
+              value: '₱ ${formatSales(controller.totalSales.value)}',
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildStatCard(
-            icon: Icons.check_box_outlined,
-            title: 'Delivered Orders',
-            value: '5',
+          const SizedBox(width: 12),
+          Expanded(
+            child: _buildStatCard(
+              icon: Icons.check_box_outlined,
+              title: 'Delivered Orders',
+              value: '${controller.deliveredCount.value}',
+            ),
           ),
-        ),
-      ],
-    );
+        ],
+      );
+    });
   }
 
   Widget _buildStatCard({
@@ -182,14 +192,18 @@ class HomePage extends GetView<HomeController> {
   Widget _buildDeliveryCards() {
     return Obx(() {
       final active = controller.activeTab.value;
+      final filtered = controller.orders.where((o) => o.status.value == active).toList();
       
-      if (active == 'Delivered') {
-        return const Center(
+      if (filtered.isEmpty) {
+        final emptyMsg = active == 'Delivered'
+            ? 'No delivered orders yet'
+            : 'No orders out for delivery';
+        return Center(
           child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 40),
+            padding: const EdgeInsets.symmetric(vertical: 40),
             child: Text(
-              'No delivered orders yet',
-              style: TextStyle(
+              emptyMsg,
+              style: const TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 14,
                 color: Color(0xFF8A8F99),
@@ -199,14 +213,16 @@ class HomePage extends GetView<HomeController> {
         );
       }
 
-      // 'Out for Delivery' active: show the sample card
-      return _buildSampleDeliveryCard();
+      return Column(
+        children: filtered.map((order) => _buildDeliveryCard(order)).toList(),
+      );
     });
   }
 
-  /// Single sample delivery card UI representing "TINDAHAN NI ALING NENA".
-  Widget _buildSampleDeliveryCard() {
+  /// Single delivery card UI.
+  Widget _buildDeliveryCard(DeliveryOrder order) {
     return Container(
+      margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -222,21 +238,21 @@ class HomePage extends GetView<HomeController> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header: distance and button
+          // Header: distance and button / status
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.location_on,
                     color: Color(0xFF10B981),
                     size: 20,
                   ),
-                  SizedBox(width: 4),
+                  const SizedBox(width: 4),
                   Text(
-                    '12m away',
-                    style: TextStyle(
+                    order.distance,
+                    style: const TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -245,27 +261,62 @@ class HomePage extends GetView<HomeController> {
                   ),
                 ],
               ),
-              ElevatedButton(
-                onPressed: () => Get.toNamed(AppRoutes.orderDetails),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6533E7),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text(
-                  'Deliver Now',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
+              Obx(() {
+                if (order.status.value == 'Delivered') {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFFFEE),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFF10B981).withOpacity(0.2),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.check_circle_rounded,
+                          color: Color(0xFF10B981),
+                          size: 16,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Delivered',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF10B981),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                } else {
+                  return ElevatedButton(
+                    onPressed: () => Get.toNamed(AppRoutes.orderDetails),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6533E7),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      'Deliver Now',
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  );
+                }
+              }),
             ],
           ),
           const SizedBox(height: 12),
@@ -289,23 +340,23 @@ class HomePage extends GetView<HomeController> {
                 ),
               ),
               const SizedBox(width: 14),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'TINDAHAN NI ALING NENA',
-                      style: TextStyle(
+                      order.storeName,
+                      style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF2F333A),
                       ),
                     ),
-                    SizedBox(height: 6),
+                    const SizedBox(height: 6),
                     Text(
-                      'Fast Distribution Head Office H. Abellana Canduman, Mandaue City Cebu',
-                      style: TextStyle(
+                      order.address,
+                      style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 13,
                         height: 1.3,
@@ -326,7 +377,7 @@ class HomePage extends GetView<HomeController> {
                 child: _buildItemDetailsBox(
                   icon: Icons.inventory_2_outlined,
                   label: 'SKU',
-                  value: '32',
+                  value: order.sku,
                 ),
               ),
               const SizedBox(width: 12),
@@ -334,7 +385,7 @@ class HomePage extends GetView<HomeController> {
                 child: _buildItemDetailsBox(
                   icon: Icons.payments_outlined,
                   label: 'Total Amount',
-                  value: '₱ 23,893.12',
+                  value: order.totalAmount,
                 ),
               ),
             ],
