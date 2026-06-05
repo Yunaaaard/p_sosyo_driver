@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'app/routes/app_pages.dart';
 import 'app/routes/app_routes.dart';
 
@@ -28,6 +29,7 @@ class MyApp extends StatelessWidget {
       title: 'PSosyo',
       initialRoute: AppRoutes.landing,
       getPages: AppPages.pages,
+      theme: AppThemes.lightTheme,
       builder: (context, child) {
         final mediaQuery = MediaQuery.of(context);
         return MediaQuery(
