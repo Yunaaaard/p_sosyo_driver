@@ -195,8 +195,8 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
           children: [
             // The receipt card
             Container(
-              width: 320,
-              height: 363, // Maintains the 342:388 aspect ratio of receipt_template.png
+              width: 400,
+              height: 500,
               decoration: const BoxDecoration(
                 image: DecorationImage(
                   image: AssetImage('assets/images/receipt_template.png'),
@@ -211,34 +211,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Header title
-                        const Center(
-                          child: Text(
-                            'TINDAHAN NI ALING NENA',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF2F333A),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Center(
-                          child: Text(
-                            'Payment QR Code',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF8A8F99),
-                            ),
-                          ),
-                        ),
                         const SizedBox(height: 16),
-                        // QR Code Container
                         Center(
                           child: Container(
                             padding: const EdgeInsets.all(12),
@@ -252,15 +225,11 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                                   offset: const Offset(0, 4),
                                 ),
                               ],
-                              border: Border.all(
-                                color: const Color(0xFFE2E4E8),
-                                width: 1,
-                              ),
                             ),
                             child: Image.asset(
-                              'assets/images/payment_qr.png',
-                              width: 140,
-                              height: 140,
+                              'assets/images/sample-qr.png',
+                              width: 250,
+                              height: 250,
                               fit: BoxFit.contain,
                             ),
                           ),
@@ -269,61 +238,35 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                     ),
                   ),
                   // Positioned details in the bottom part of the receipt template
-                  Positioned(
-                    left: 24,
-                    right: 24,
-                    bottom: 24,
-                    child: Column(
-                      children: [
-                        const Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'SKU Count',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF8A8F99),
-                              ),
-                            ),
-                            Text(
-                              '32',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF2F333A),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Total Amount',
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF8A8F99),
-                              ),
-                            ),
-                            Text.rich(
-                              PesoFormatter.buildPesoTextSpan(
-                                amount: '23,893.12',
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: const Color(0xFF6533E7),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                  // Positioned details in the bottom part of the receipt template
+Positioned(
+  left: 24,
+  right: 24,
+  bottom: 38,
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      const Text(
+        'Total Amount',
+        style: TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 24,
+          fontWeight: FontWeight.w500,
+          color: Color(0xFF8A8F99),
+        ),
+      ),
+      const SizedBox(height: 4),
+      Text.rich(
+        PesoFormatter.buildPesoTextSpan(
+          amount: '23,893.12',
+          fontSize: 46,
+          fontWeight: FontWeight.bold,
+          color: const Color(0xFF6533E7),
+        ),
+      ),
+    ],
+  ),
+),
                 ],
               ),
             ),
