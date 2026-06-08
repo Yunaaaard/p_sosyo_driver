@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
 import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
@@ -375,7 +376,7 @@ class HomePage extends GetView<HomeController> {
             children: [
               Expanded(
                 child: _buildItemDetailsBox(
-                  icon: Icons.inventory_2_outlined,
+                  svgPath: 'assets/icons/sku-icon.svg',
                   label: 'SKU',
                   value: order.sku,
                 ),
@@ -396,7 +397,8 @@ class HomePage extends GetView<HomeController> {
   }
 
   Widget _buildItemDetailsBox({
-    required IconData icon,
+    IconData? icon,
+    String? svgPath,
     required String label,
     required String value,
   }) {
@@ -408,11 +410,21 @@ class HomePage extends GetView<HomeController> {
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: const Color(0xFFB8BCC5),
-            size: 16,
-          ),
+          svgPath != null
+              ? SvgPicture.asset(
+                  svgPath,
+                  width: 16,
+                  height: 16,
+                  colorFilter: const ColorFilter.mode(
+                    Color(0xFFB8BCC5),
+                    BlendMode.srcIn,
+                  ),
+                )
+              : Icon(
+                  icon,
+                  color: const Color(0xFFB8BCC5),
+                  size: 16,
+                ),
           const SizedBox(width: 6),
           Text(
             label,
@@ -454,25 +466,45 @@ class HomePage extends GetView<HomeController> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildBottomBarItem(Icons.sync_rounded, 'Resync', () {}),
-          _buildBottomBarItem(Icons.exit_to_app_rounded, 'End of Day', () {}),
-          _buildBottomBarItem(Icons.calendar_today_rounded, 'Date', () {}),
+          _buildBottomBarItem(
+            svgPath: 'assets/icons/resync-icon.svg',
+            label: 'Resync',
+            onTap: () => controller.showSyncDialog(),
+          ),
+          _buildBottomBarItem(
+            svgPath: 'assets/icons/endofday_icon.svg',
+            label: 'End of Day',
+            onTap: () {},
+          ),
+          _buildBottomBarItem(
+            svgPath: 'assets/icons/date-icon.svg',
+            label: 'Date',
+            onTap: () {},
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildBottomBarItem(
-    IconData icon,
-    String label,
-    VoidCallback onTap,
-  ) {
+  Widget _buildBottomBarItem({
+    required String svgPath,
+    required String label,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: const Color(0xFF6533E7), size: 28),
+          SvgPicture.asset(
+            svgPath,
+            width: 28,
+            height: 28,
+            colorFilter: const ColorFilter.mode(
+              Color(0xFF6533E7),
+              BlendMode.srcIn,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(
             label,

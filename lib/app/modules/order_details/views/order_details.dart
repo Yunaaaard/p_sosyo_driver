@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
 import 'package:p_sosyo_driver/app/modules/order_details/controller/order_details_controller.dart';
@@ -87,7 +88,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
             children: [
               Expanded(
                 child: _buildItemDetailsBox(
-                  icon: Icons.inventory_2_outlined,
+                  svgPath: 'assets/icons/sku-icon.svg',
                   label: 'SKU',
                   value: '32',
                 ),
@@ -154,34 +155,201 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
           const SizedBox(height: 16),
 
           // Generate QR button
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6533E7),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              elevation: 0,
-            ),
-            child: const Text(
-              'Generate QR for Payment',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+          Builder(
+            builder: (context) {
+              return ElevatedButton(
+                onPressed: () => _showPaymentReceiptDialog(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6533E7),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Generate QR for Payment',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              );
+            }
           ),
         ],
       ),
     );
   }
 
+  void _showPaymentReceiptDialog(BuildContext context) {
+    Get.dialog(
+      Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // The receipt card
+            Container(
+              width: 320,
+              height: 363, // Maintains the 342:388 aspect ratio of receipt_template.png
+              decoration: const BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage('assets/images/receipt_template.png'),
+                  fit: BoxFit.fill,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  // Inner Content
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Header title
+                        const Center(
+                          child: Text(
+                            'TINDAHAN NI ALING NENA',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF2F333A),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Center(
+                          child: Text(
+                            'Payment QR Code',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF8A8F99),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // QR Code Container
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                              border: Border.all(
+                                color: const Color(0xFFE2E4E8),
+                                width: 1,
+                              ),
+                            ),
+                            child: Image.asset(
+                              'assets/images/payment_qr.png',
+                              width: 140,
+                              height: 140,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Positioned details in the bottom part of the receipt template
+                  Positioned(
+                    left: 24,
+                    right: 24,
+                    bottom: 24,
+                    child: Column(
+                      children: [
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'SKU Count',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF8A8F99),
+                              ),
+                            ),
+                            Text(
+                              '32',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2F333A),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Total Amount',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF8A8F99),
+                              ),
+                            ),
+                            Text.rich(
+                              PesoFormatter.buildPesoTextSpan(
+                                amount: '23,893.12',
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF6533E7),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Close button below the receipt card
+            IconButton(
+              onPressed: () => Get.back(),
+              icon: const Icon(Icons.close_rounded),
+              color: Colors.white,
+              iconSize: 32,
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.white.withOpacity(0.2),
+                padding: const EdgeInsets.all(8),
+              ),
+            ),
+          ],
+        ),
+      ),
+      barrierDismissible: true,
+    );
+  }
+
   /// Single item details info box (SKU / Total Amount).
   Widget _buildItemDetailsBox({
-    required IconData icon,
+    IconData? icon,
+    String? svgPath,
     required String label,
     required String value,
   }) {
@@ -193,11 +361,21 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: const Color(0xFFB8BCC5),
-            size: 16,
-          ),
+          svgPath != null
+              ? SvgPicture.asset(
+                  svgPath,
+                  width: 16,
+                  height: 16,
+                  colorFilter: const ColorFilter.mode(
+                    Color(0xFFB8BCC5),
+                    BlendMode.srcIn,
+                  ),
+                )
+              : Icon(
+                  icon,
+                  color: const Color(0xFFB8BCC5),
+                  size: 16,
+                ),
           const SizedBox(width: 6),
           Text(
             label,

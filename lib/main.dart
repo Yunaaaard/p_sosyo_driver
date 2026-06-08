@@ -29,7 +29,7 @@ class MyApp extends StatelessWidget {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'PSosyo',
-      initialRoute: AppRoutes.home,
+      initialRoute: AppRoutes.landing,
       getPages: AppPages.pages,
       theme: AppThemes.lightTheme,
       builder: (context, child) {

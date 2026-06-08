@@ -21,8 +21,8 @@ class LandingPage extends GetView<LandingController> {
           // Foreground Content
           Center(
             child: Image.asset(
-              'assets/images/p_sosyo_driver_logo.png',
-              width: 400,
+              'assets/images/psosyo_driver_logo.png',
+              width: 250,
               fit: BoxFit.contain,
             ),
           ),
