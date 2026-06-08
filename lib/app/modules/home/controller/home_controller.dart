@@ -17,8 +17,8 @@ class HomeController extends GetxController {
     ),
   ].obs;
 
-  final RxInt deliveredCount = 5.obs;
-  final RxDouble totalSales = 23893.12.obs;
+  final RxInt deliveredCount = 0.obs;
+  final RxDouble totalSales = 0.0.obs;
 
   // Syncing states
   final RxBool isSyncing = false.obs;

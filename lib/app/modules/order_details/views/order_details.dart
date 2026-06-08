@@ -17,26 +17,27 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
         title: 'Order Details',
         showBackButton: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Top card combining stats details & store details
-            _buildMainDetailsCard(),
-            const SizedBox(height: 16),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: _buildMainDetailsCard(),
+          ),
+          const SizedBox(height: 16),
 
-            // Order items list
-            Obx(() {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: controller.items
-                    .map((item) => _buildItemCard(item))
-                    .toList(),
-              );
-            }),
-          ],
-        ),
+          // ── Scrollable item cards only ──────────
+          Expanded(
+            child: Obx(
+              () => ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: controller.items.length,
+                itemBuilder: (context, index) =>
+                    _buildItemCard(controller.items[index]),
+              ),
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: Container(
         color: const Color(0xFFF6F6F8),
@@ -65,7 +66,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
     );
   }
 
-  /// Builds the main details card containing SKU/Amount boxes, store details, and payment trigger.
+  /// Builds the main details card — fixed, never scrolls.
   Widget _buildMainDetailsCard() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -104,10 +105,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
             ],
           ),
           const SizedBox(height: 16),
-          const Divider(
-            height: 1,
-            color: Color(0xFFF1F1F1),
-          ),
+          const Divider(height: 1, color: Color(0xFFF1F1F1)),
           const SizedBox(height: 16),
 
           // Store details row
@@ -156,28 +154,26 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
 
           // Generate QR button
           Builder(
-            builder: (context) {
-              return ElevatedButton(
-                onPressed: () => _showPaymentReceiptDialog(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6533E7),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  elevation: 0,
+            builder: (context) => ElevatedButton(
+              onPressed: () => _showPaymentReceiptDialog(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6533E7),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
-                  'Generate QR for Payment',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Generate QR for Payment',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                 ),
-              );
-            }
+              ),
+            ),
           ),
         ],
       ),
@@ -193,7 +189,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // The receipt card
+            // Receipt card
             Container(
               width: 400,
               height: 500,
@@ -205,9 +201,10 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
               ),
               child: Stack(
                 children: [
-                  // Inner Content
+                  // QR code section
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -237,41 +234,40 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                       ],
                     ),
                   ),
-                  // Positioned details in the bottom part of the receipt template
-                  // Positioned details in the bottom part of the receipt template
-Positioned(
-  left: 24,
-  right: 24,
-  bottom: 38,
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.center,
-    children: [
-      const Text(
-        'Total Amount',
-        style: TextStyle(
-          fontFamily: 'Poppins',
-          fontSize: 24,
-          fontWeight: FontWeight.w500,
-          color: Color(0xFF8A8F99),
-        ),
-      ),
-      const SizedBox(height: 4),
-      Text.rich(
-        PesoFormatter.buildPesoTextSpan(
-          amount: '23,893.12',
-          fontSize: 46,
-          fontWeight: FontWeight.bold,
-          color: const Color(0xFF6533E7),
-        ),
-      ),
-    ],
-  ),
-),
+                  // Amount at bottom of receipt
+                  Positioned(
+                    left: 24,
+                    right: 24,
+                    bottom: 38,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'Total Amount',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 24,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF8A8F99),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text.rich(
+                          PesoFormatter.buildPesoTextSpan(
+                            amount: '23,893.12',
+                            fontSize: 46,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF6533E7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 20),
-            // Close button below the receipt card
+            // Close button
             IconButton(
               onPressed: () => Get.back(),
               icon: const Icon(Icons.close_rounded),
@@ -314,11 +310,7 @@ Positioned(
                     BlendMode.srcIn,
                   ),
                 )
-              : Icon(
-                  icon,
-                  color: const Color(0xFFB8BCC5),
-                  size: 16,
-                ),
+              : Icon(icon, color: const Color(0xFFB8BCC5), size: 16),
           const SizedBox(width: 6),
           Text(
             label,
@@ -352,7 +344,7 @@ Positioned(
     );
   }
 
-  /// Single item card layout showing quantity and total info.
+  /// Single item card — these are the only widgets that scroll.
   Widget _buildItemCard(OrderItem item) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -435,7 +427,7 @@ Positioned(
     );
   }
 
-  /// Builds customized product image placeholder or thumbnail icon.
+  /// Product image placeholder.
   Widget _buildProductImage(String title) {
     return Container(
       width: 76,
