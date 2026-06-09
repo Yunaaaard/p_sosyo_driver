@@ -16,29 +16,56 @@ class HomePage extends GetView<HomeController> {
       backgroundColor: const Color(0xFFF6F6F8),
       appBar: const CustomAppBar(),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Sales & Orders stats row
-                  _buildStatsRow(),
-                  const SizedBox(height: 20),
-
-                  // Custom Tab Selector
-                  _buildTabSelector(),
-                  const SizedBox(height: 20),
-
-                  // Delivery Cards List
-                  _buildDeliveryCards(),
-                ],
-              ),
-            ),
+          // ── Fixed: stats row ───────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: _buildStatsRow(),
           ),
-          
-          // Custom Bottom Navigation Bar
+          const SizedBox(height: 20),
+
+          // ── Fixed: tab selector ────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildTabSelector(),
+          ),
+          const SizedBox(height: 20),
+
+          // ── Scrollable: delivery cards only ────
+          Expanded(
+            child: Obx(() {
+              final active = controller.activeTab.value;
+              final filtered = controller.orders
+                  .where((o) => o.status.value == active)
+                  .toList();
+
+              if (filtered.isEmpty) {
+                final emptyMsg = active == 'Delivered'
+                    ? 'No delivered orders yet'
+                    : 'No orders out for delivery';
+                return Center(
+                  child: Text(
+                    emptyMsg,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: Color(0xFF8A8F99),
+                    ),
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                itemCount: filtered.length,
+                itemBuilder: (context, index) =>
+                    _buildDeliveryCard(filtered[index]),
+              );
+            }),
+          ),
+
+          // ── Fixed: bottom nav bar ──────────────
           _buildBottomNavBar(),
         ],
       ),
@@ -93,11 +120,7 @@ class HomePage extends GetView<HomeController> {
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                color: const Color(0xFF6533E7),
-                size: 20,
-              ),
+              Icon(icon, color: const Color(0xFF6533E7), size: 20),
               const SizedBox(width: 8),
               Text(
                 title,
@@ -138,26 +161,23 @@ class HomePage extends GetView<HomeController> {
   Widget _buildTabSelector() {
     return Obx(() {
       final active = controller.activeTab.value;
-      
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-        child: Row(
-          children: [
-            Expanded(
-              child: _buildTabButton(
-                label: 'Out for Delivery',
-                isSelected: active == 'Out for Delivery',
-              ),
+
+      return Row(
+        children: [
+          Expanded(
+            child: _buildTabButton(
+              label: 'Out for Delivery',
+              isSelected: active == 'Out for Delivery',
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildTabButton(
-                label: 'Delivered',
-                isSelected: active == 'Delivered',
-              ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _buildTabButton(
+              label: 'Delivered',
+              isSelected: active == 'Delivered',
             ),
-          ],
-        ),
+          ),
+        ],
       );
     });
   }
@@ -187,37 +207,6 @@ class HomePage extends GetView<HomeController> {
         ),
       ),
     );
-  }
-
-  /// Builds the list of delivery cards.
-  Widget _buildDeliveryCards() {
-    return Obx(() {
-      final active = controller.activeTab.value;
-      final filtered = controller.orders.where((o) => o.status.value == active).toList();
-      
-      if (filtered.isEmpty) {
-        final emptyMsg = active == 'Delivered'
-            ? 'No delivered orders yet'
-            : 'No orders out for delivery';
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 40),
-            child: Text(
-              emptyMsg,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 14,
-                color: Color(0xFF8A8F99),
-              ),
-            ),
-          ),
-        );
-      }
-
-      return Column(
-        children: filtered.map((order) => _buildDeliveryCard(order)).toList(),
-      );
-    });
   }
 
   /// Single delivery card UI.
@@ -265,7 +254,8 @@ class HomePage extends GetView<HomeController> {
               Obx(() {
                 if (order.status.value == 'Delivered') {
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: const Color(0xFFEFFFEE),
                       borderRadius: BorderRadius.circular(8),
@@ -300,7 +290,8 @@ class HomePage extends GetView<HomeController> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6533E7),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -321,10 +312,7 @@ class HomePage extends GetView<HomeController> {
             ],
           ),
           const SizedBox(height: 12),
-          const Divider(
-            height: 1,
-            color: Color(0xFFF1F1F1),
-          ),
+          const Divider(height: 1, color: Color(0xFFF1F1F1)),
           const SizedBox(height: 16),
 
           // Store image and details row
@@ -420,11 +408,7 @@ class HomePage extends GetView<HomeController> {
                     BlendMode.srcIn,
                   ),
                 )
-              : Icon(
-                  icon,
-                  color: const Color(0xFFB8BCC5),
-                  size: 16,
-                ),
+              : Icon(icon, color: const Color(0xFFB8BCC5), size: 16),
           const SizedBox(width: 6),
           Text(
             label,

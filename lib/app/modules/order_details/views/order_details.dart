@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
+import 'package:p_sosyo_driver/app/data/models/order_item.dart';
 import 'package:p_sosyo_driver/app/modules/order_details/controller/order_details_controller.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_appBar.dart';
 import 'package:p_sosyo_driver/app/routes/app_routes.dart';
@@ -22,7 +23,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: _buildMainDetailsCard(),
+            child: Obx(() => _buildMainDetailsCard()),
           ),
           const SizedBox(height: 16),
 
@@ -91,7 +92,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                 child: _buildItemDetailsBox(
                   svgPath: 'assets/icons/sku-icon.svg',
                   label: 'SKU',
-                  value: '32',
+                  value: controller.totalSku.toString(),
                 ),
               ),
               const SizedBox(width: 12),
@@ -99,7 +100,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                 child: _buildItemDetailsBox(
                   icon: Icons.payments_outlined,
                   label: 'Total Amount',
-                  value: '₱ 23,893.12',
+                  value: controller.formattedTotalAmount,
                 ),
               ),
             ],
@@ -380,7 +381,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                 ),
                 const SizedBox(height: 6),
                 PesoFormatter.buildPesoText(
-                  amount: item.price,
+                  amount: item.formattedPrice,
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: const Color(0xFF2F333A),
@@ -409,7 +410,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                             ),
                           ),
                           PesoFormatter.buildPesoTextSpan(
-                            amount: item.totalAmount,
+                            amount: item.formattedTotalAmount,
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
                             color: const Color(0xFF2F333A),

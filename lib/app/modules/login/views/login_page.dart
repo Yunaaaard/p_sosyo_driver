@@ -18,63 +18,66 @@ class LoginPage extends GetView<LoginController> {
       controller.syncKeyboardState(keyboardOpen);
     });
 
-    return GestureDetector(
-      onTap: controller.dismissKeyboard,
-      child: Material(
-        color: Colors.transparent,
-        child: SafeArea(
-          top: false,
-          child: Obx(() {
-            final isKeyboardVisible = controller.keyboardVisible.value;
-
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOut,
-              alignment: Alignment.bottomCenter,
-              child: FractionallySizedBox(
+    return PopScope(
+      canPop: false,
+      child: GestureDetector(
+        onTap: controller.dismissKeyboard,
+        child: Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            top: false,
+            child: Obx(() {
+              final isKeyboardVisible = controller.keyboardVisible.value;
+    
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
                 alignment: Alignment.bottomCenter,
-                heightFactor: isKeyboardVisible ? 0.85 : 0.72,
-                child: Container(
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(32),
-                      topRight: Radius.circular(32),
+                child: FractionallySizedBox(
+                  alignment: Alignment.bottomCenter,
+                  heightFactor: isKeyboardVisible ? 0.85 : 0.72,
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(32),
+                        topRight: Radius.circular(32),
+                      ),
                     ),
-                  ),
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                      20,
-                      isKeyboardVisible ? 12 : 16,
-                      20,
-                      isKeyboardVisible ? 16 : 24,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SizedBox(height: 20),
-                        _buildHeader(isKeyboardVisible),
-                        const SizedBox(height: 20),
-                        _buildUsernameField(),
-                        const SizedBox(height: 18),
-                        _buildPasswordField(),
-                        const SizedBox(height: 16),
-                        _buildRememberRow(),
-                        const SizedBox(height: 25),
-                        CustomButton(
-                          label: 'Let\'s Start',
-                          onPressed: controller.submitLogin,
-                        ),
-                        const SizedBox(height: 5),
-                      ],
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        isKeyboardVisible ? 12 : 16,
+                        20,
+                        isKeyboardVisible ? 16 : 24,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: 20),
+                          _buildHeader(isKeyboardVisible),
+                          const SizedBox(height: 20),
+                          _buildUsernameField(),
+                          const SizedBox(height: 18),
+                          _buildPasswordField(),
+                          const SizedBox(height: 16),
+                          _buildRememberRow(),
+                          const SizedBox(height: 25),
+                          CustomButton(
+                            label: 'Let\'s Start',
+                            onPressed: controller.submitLogin,
+                          ),
+                          const SizedBox(height: 5),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          }),
+              );
+            }),
+          ),
         ),
       ),
     );

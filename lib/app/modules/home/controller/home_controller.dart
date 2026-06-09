@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
+import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 
 class HomeController extends GetxController {
   final RxString activeTab = "Out for Delivery".obs;
@@ -23,6 +24,45 @@ class HomeController extends GetxController {
   // Syncing states
   final RxBool isSyncing = false.obs;
   final RxBool isSyncCompleted = false.obs;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _loadOrderTotals();
+  }
+
+  Future<void> _loadOrderTotals() async {
+    try {
+      final dbService = DatabaseService.to;
+      for (var i = 0; i < orders.length; i++) {
+        final order = orders[i];
+        final items = await dbService.getOrderItems(order.id);
+        if (items.isNotEmpty) {
+          final totalSku = items.length;
+          double totalAmount = 0.0;
+          for (final item in items) {
+            totalAmount += item.totalAmount;
+          }
+          final parts = totalAmount.toStringAsFixed(2).split('.');
+          final regExp = RegExp(r'\B(?=(\d{3})+(?!\d))');
+          parts[0] = parts[0].replaceAllMapped(regExp, (Match m) => ',');
+          final formattedAmount = '₱ ${parts.join('.')}';
+
+          orders[i] = DeliveryOrder(
+            id: order.id,
+            storeName: order.storeName,
+            address: order.address,
+            distance: order.distance,
+            sku: totalSku.toString(),
+            totalAmount: formattedAmount,
+            status: order.status.value,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading order totals in HomeController: $e');
+    }
+  }
 
   @override
   void onReady() {

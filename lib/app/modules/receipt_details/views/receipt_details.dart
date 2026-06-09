@@ -50,12 +50,6 @@ class ReceiptDetailsPage extends GetView<ReceiptDetailsController> {
                         )),
                     const SizedBox(height: 18),
                     Obx(() => _buildField(
-                          label: 'Receiver',
-                          value: controller.receiver.value,
-                          placeholder: 'Scan a receipt to display details',
-                        )),
-                    const SizedBox(height: 18),
-                    Obx(() => _buildField(
                           label: 'Date',
                           value: controller.date.value,
                           placeholder: 'Scan a receipt to display details',

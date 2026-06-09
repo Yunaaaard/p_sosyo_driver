@@ -1,0 +1,263 @@
+import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
+import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:p_sosyo_driver/app/data/models/driver.dart';
+import 'package:p_sosyo_driver/app/data/models/order_item.dart';
+import 'package:p_sosyo_driver/app/data/models/receipt.dart';
+
+class DatabaseService extends GetxService {
+  static DatabaseService get to => Get.find<DatabaseService>();
+
+  late final Database _db;
+
+  /// Initialize the database. Call once before runApp.
+  Future<DatabaseService> init() async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, 'psosyo_driver.db');
+
+    _db = await openDatabase(
+      path,
+      version: 1,
+      onCreate: _onCreate,
+    );
+
+    return this;
+  }
+
+  /// Creates all tables and seeds default data.
+  Future<void> _onCreate(Database db, int version) async {
+    // ── Drivers table ──────────────────────────────
+    await db.execute('''
+      CREATE TABLE drivers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password TEXT NOT NULL,
+        full_name TEXT NOT NULL,
+        pin TEXT NOT NULL,
+        remember_me INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    // ── Order items table ──────────────────────────
+    await db.execute('''
+      CREATE TABLE order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        delivery_order_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        price REAL NOT NULL,
+        ordered_qty TEXT NOT NULL,
+        total_amount REAL NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
+    // ── Receipts table ─────────────────────────────
+    await db.execute('''
+      CREATE TABLE receipts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        delivery_order_id TEXT NOT NULL,
+        reference_number TEXT NOT NULL,
+        total_amount REAL NOT NULL,
+        sender TEXT NOT NULL,
+        receiver TEXT NOT NULL,
+        date TEXT NOT NULL,
+        scanned_at TEXT NOT NULL
+      )
+    ''');
+
+    // ── Seed default data ──────────────────────────
+    await _seedData(db);
+  }
+
+  Future<void> _seedData(Database db) async {
+    await db.insert('drivers', Driver(
+      username: 'SMB0012',
+      password: 'password123',
+      fullName: 'Juan Dela Cruz',
+      pin: '123456',
+    ).toMap());
+    final defaultItems = [
+      OrderItem(
+        deliveryOrderId: '1',
+        title: 'NESCAFE CLASSIC COFFEE REFILL | 170G',
+        price: 123.00,
+        orderedQty: '23PC',
+        totalAmount: 1839.00,
+      ),
+      OrderItem(
+        deliveryOrderId: '1',
+        title: 'BEAR BRAND STERILIZED MILK 200ML',
+        price: 123.00,
+        orderedQty: '23PC',
+        totalAmount: 1839.00,
+      ),
+      OrderItem(
+        deliveryOrderId: '1',
+        title: 'READY-TO-DRINK CAPPUCCINO',
+        price: 123.00,
+        orderedQty: '23PC',
+        totalAmount: 1839.00,
+      ),
+      OrderItem(
+        deliveryOrderId: '1',
+        title: 'SUGARFREE CREAMY WHITE',
+        price: 123.00,
+        orderedQty: '23PC',
+        totalAmount: 1839.00,
+      ),
+      OrderItem(
+        deliveryOrderId: '1',
+        title: 'NESCAFÉ® ORIGINAL',
+        price: 123.00,
+        orderedQty: '23PC',
+        totalAmount: 1839.00,
+      ),
+    ];
+
+    for (final item in defaultItems) {
+      await db.insert('order_items', item.toMap());
+    }
+
+    debugPrint('DatabaseService: Seeded default driver and order items.');
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  Driver CRUD
+  // ═══════════════════════════════════════════════════
+
+  /// Authenticate a driver by username and password.
+  /// Returns the [Driver] if credentials match, otherwise null.
+  Future<Driver?> authenticateDriver(String username, String password) async {
+    final results = await _db.query(
+      'drivers',
+      where: 'username = ? AND password = ?',
+      whereArgs: [username, password],
+      limit: 1,
+    );
+
+    if (results.isNotEmpty) {
+      return Driver.fromMap(results.first);
+    }
+    return null;
+  }
+
+  /// Get a driver by username.
+  Future<Driver?> getDriverByUsername(String username) async {
+    final results = await _db.query(
+      'drivers',
+      where: 'username = ?',
+      whereArgs: [username],
+      limit: 1,
+    );
+
+    if (results.isNotEmpty) {
+      return Driver.fromMap(results.first);
+    }
+    return null;
+  }
+
+  /// Update the remember_me flag for a driver.
+  Future<void> updateRememberMe(int driverId, bool rememberMe) async {
+    await _db.update(
+      'drivers',
+      {'remember_me': rememberMe ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [driverId],
+    );
+  }
+
+  /// Get the driver with remember_me enabled (if any).
+  Future<Driver?> getRememberedDriver() async {
+    final results = await _db.query(
+      'drivers',
+      where: 'remember_me = 1',
+      limit: 1,
+    );
+
+    if (results.isNotEmpty) {
+      return Driver.fromMap(results.first);
+    }
+    return null;
+  }
+
+  /// Verify a driver's PIN. Returns true if the PIN matches.
+  Future<bool> verifyPin(String username, String pin) async {
+    final results = await _db.query(
+      'drivers',
+      where: 'username = ? AND pin = ?',
+      whereArgs: [username, pin],
+      limit: 1,
+    );
+
+    return results.isNotEmpty;
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  Order Items CRUD
+  // ═══════════════════════════════════════════════════
+
+  /// Get all order items for a specific delivery order.
+  Future<List<OrderItem>> getOrderItems(String deliveryOrderId) async {
+    final results = await _db.query(
+      'order_items',
+      where: 'delivery_order_id = ?',
+      whereArgs: [deliveryOrderId],
+    );
+
+    return results.map((map) => OrderItem.fromMap(map)).toList();
+  }
+
+  /// Get all order items.
+  Future<List<OrderItem>> getAllOrderItems() async {
+    final results = await _db.query('order_items');
+    return results.map((map) => OrderItem.fromMap(map)).toList();
+  }
+
+  /// Insert a new order item.
+  Future<int> insertOrderItem(OrderItem item) async {
+    return await _db.insert('order_items', item.toMap());
+  }
+
+  /// Delete all order items for a delivery order.
+  Future<int> deleteOrderItems(String deliveryOrderId) async {
+    return await _db.delete(
+      'order_items',
+      where: 'delivery_order_id = ?',
+      whereArgs: [deliveryOrderId],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════
+  //  Receipts CRUD
+  // ═══════════════════════════════════════════════════
+
+  /// Insert a scanned receipt.
+  Future<int> insertReceipt(Receipt receipt) async {
+    return await _db.insert('receipts', receipt.toMap());
+  }
+
+  /// Get all receipts for a delivery order.
+  Future<List<Receipt>> getReceipts(String deliveryOrderId) async {
+    final results = await _db.query(
+      'receipts',
+      where: 'delivery_order_id = ?',
+      whereArgs: [deliveryOrderId],
+    );
+
+    return results.map((map) => Receipt.fromMap(map)).toList();
+  }
+
+  /// Get all receipts.
+  Future<List<Receipt>> getAllReceipts() async {
+    final results = await _db.query('receipts');
+    return results.map((map) => Receipt.fromMap(map)).toList();
+  }
+
+  @override
+  void onClose() {
+    _db.close();
+    super.onClose();
+  }
+}
