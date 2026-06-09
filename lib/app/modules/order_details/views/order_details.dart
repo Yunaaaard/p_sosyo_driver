@@ -182,6 +182,8 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
   }
 
   void _showPaymentReceiptDialog(BuildContext context) {
+    final receiptAmount = controller.formattedTotalAmount.replaceFirst('₱ ', '').trim();
+
     Get.dialog(
       Dialog(
         backgroundColor: Colors.transparent,
@@ -255,7 +257,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                         const SizedBox(height: 4),
                         Text.rich(
                           PesoFormatter.buildPesoTextSpan(
-                            amount: '23,893.12',
+                            amount: receiptAmount,
                             fontSize: 46,
                             fontWeight: FontWeight.bold,
                             color: const Color(0xFF6533E7),

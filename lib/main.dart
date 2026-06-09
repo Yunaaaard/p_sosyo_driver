@@ -20,18 +20,27 @@ void main() async {
   await Get.putAsync(() => DatabaseService().init());
   Get.put(ScannerService());
 
-  runApp(const MyApp());
+  final initialRoute = await _resolveInitialRoute();
+
+  runApp(MyApp(initialRoute: initialRoute));
+}
+
+Future<String> _resolveInitialRoute() async {
+  final authenticatedDriver = await DatabaseService.to.getAuthenticatedDriver();
+  return authenticatedDriver != null ? AppRoutes.home : AppRoutes.landing;
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.initialRoute});
+
+  final String initialRoute;
 
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'PSosyo',
-      initialRoute: AppRoutes.landing,
+      initialRoute: initialRoute,
       getPages: AppPages.pages,
       theme: AppThemes.lightTheme,
       builder: (context, child) {

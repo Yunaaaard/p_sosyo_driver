@@ -11,23 +11,21 @@ class DatabaseService extends GetxService {
 
   late final Database _db;
 
-  /// Initialize the database. Call once before runApp.
   Future<DatabaseService> init() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'psosyo_driver.db');
 
     _db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
 
     return this;
   }
 
-  /// Creates all tables and seeds default data.
   Future<void> _onCreate(Database db, int version) async {
-    // ── Drivers table ──────────────────────────────
     await db.execute('''
       CREATE TABLE drivers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,11 +34,11 @@ class DatabaseService extends GetxService {
         full_name TEXT NOT NULL,
         pin TEXT NOT NULL,
         remember_me INTEGER NOT NULL DEFAULT 0,
+        is_authenticated INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL
       )
     ''');
 
-    // ── Order items table ──────────────────────────
     await db.execute('''
       CREATE TABLE order_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,7 +51,6 @@ class DatabaseService extends GetxService {
       )
     ''');
 
-    // ── Receipts table ─────────────────────────────
     await db.execute('''
       CREATE TABLE receipts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,7 +64,6 @@ class DatabaseService extends GetxService {
       )
     ''');
 
-    // ── Seed default data ──────────────────────────
     await _seedData(db);
   }
 
@@ -123,12 +119,14 @@ class DatabaseService extends GetxService {
     debugPrint('DatabaseService: Seeded default driver and order items.');
   }
 
-  // ═══════════════════════════════════════════════════
-  //  Driver CRUD
-  // ═══════════════════════════════════════════════════
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(
+        'ALTER TABLE drivers ADD COLUMN is_authenticated INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+  }
 
-  /// Authenticate a driver by username and password.
-  /// Returns the [Driver] if credentials match, otherwise null.
   Future<Driver?> authenticateDriver(String username, String password) async {
     final results = await _db.query(
       'drivers',
@@ -158,7 +156,6 @@ class DatabaseService extends GetxService {
     return null;
   }
 
-  /// Update the remember_me flag for a driver.
   Future<void> updateRememberMe(int driverId, bool rememberMe) async {
     await _db.update(
       'drivers',
@@ -168,7 +165,23 @@ class DatabaseService extends GetxService {
     );
   }
 
-  /// Get the driver with remember_me enabled (if any).
+  Future<void> clearAuthenticatedDrivers() async {
+    await _db.update(
+      'drivers',
+      {'is_authenticated': 0},
+    );
+  }
+
+  Future<void> setAuthenticatedDriver(int driverId) async {
+    await clearAuthenticatedDrivers();
+    await _db.update(
+      'drivers',
+      {'is_authenticated': 1},
+      where: 'id = ?',
+      whereArgs: [driverId],
+    );
+  }
+
   Future<Driver?> getRememberedDriver() async {
     final results = await _db.query(
       'drivers',
@@ -182,7 +195,19 @@ class DatabaseService extends GetxService {
     return null;
   }
 
-  /// Verify a driver's PIN. Returns true if the PIN matches.
+  Future<Driver?> getAuthenticatedDriver() async {
+    final results = await _db.query(
+      'drivers',
+      where: 'is_authenticated = 1',
+      limit: 1,
+    );
+
+    if (results.isNotEmpty) {
+      return Driver.fromMap(results.first);
+    }
+    return null;
+  }
+
   Future<bool> verifyPin(String username, String pin) async {
     final results = await _db.query(
       'drivers',
@@ -194,11 +219,6 @@ class DatabaseService extends GetxService {
     return results.isNotEmpty;
   }
 
-  // ═══════════════════════════════════════════════════
-  //  Order Items CRUD
-  // ═══════════════════════════════════════════════════
-
-  /// Get all order items for a specific delivery order.
   Future<List<OrderItem>> getOrderItems(String deliveryOrderId) async {
     final results = await _db.query(
       'order_items',
@@ -229,16 +249,10 @@ class DatabaseService extends GetxService {
     );
   }
 
-  // ═══════════════════════════════════════════════════
-  //  Receipts CRUD
-  // ═══════════════════════════════════════════════════
-
-  /// Insert a scanned receipt.
   Future<int> insertReceipt(Receipt receipt) async {
     return await _db.insert('receipts', receipt.toMap());
   }
 
-  /// Get all receipts for a delivery order.
   Future<List<Receipt>> getReceipts(String deliveryOrderId) async {
     final results = await _db.query(
       'receipts',
@@ -249,7 +263,6 @@ class DatabaseService extends GetxService {
     return results.map((map) => Receipt.fromMap(map)).toList();
   }
 
-  /// Get all receipts.
   Future<List<Receipt>> getAllReceipts() async {
     final results = await _db.query('receipts');
     return results.map((map) => Receipt.fromMap(map)).toList();

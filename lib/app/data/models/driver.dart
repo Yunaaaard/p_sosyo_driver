@@ -5,6 +5,7 @@ class Driver {
   final String fullName;
   final String pin;
   final bool rememberMe;
+  final bool isAuthenticated;
   final String createdAt;
 
   Driver({
@@ -14,6 +15,7 @@ class Driver {
     required this.fullName,
     required this.pin,
     this.rememberMe = false,
+    this.isAuthenticated = false,
     String? createdAt,
   }) : createdAt = createdAt ?? DateTime.now().toIso8601String();
 
@@ -26,6 +28,7 @@ class Driver {
       fullName: map['full_name'] as String,
       pin: map['pin'] as String,
       rememberMe: (map['remember_me'] as int?) == 1,
+      isAuthenticated: (map['is_authenticated'] as int?) == 1,
       createdAt: map['created_at'] as String,
     );
   }
@@ -39,6 +42,7 @@ class Driver {
       'full_name': fullName,
       'pin': pin,
       'remember_me': rememberMe ? 1 : 0,
+      'is_authenticated': isAuthenticated ? 1 : 0,
       'created_at': createdAt,
     };
   }
@@ -51,6 +55,7 @@ class Driver {
     String? fullName,
     String? pin,
     bool? rememberMe,
+    bool? isAuthenticated,
     String? createdAt,
   }) {
     return Driver(
@@ -60,6 +65,7 @@ class Driver {
       fullName: fullName ?? this.fullName,
       pin: pin ?? this.pin,
       rememberMe: rememberMe ?? this.rememberMe,
+      isAuthenticated: isAuthenticated ?? this.isAuthenticated,
       createdAt: createdAt ?? this.createdAt,
     );
   }

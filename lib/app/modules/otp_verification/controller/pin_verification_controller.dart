@@ -63,6 +63,7 @@ class PinVerificationController extends GetxController {
       final isValid = await _dbService.verifyPin(driver.username, pin.value);
 
       if (isValid) {
+        await _dbService.setAuthenticatedDriver(driver.id!);
         Get.offAllNamed(AppRoutes.home);
       } else {
         pin.value = ''; // Clear the PIN on failure
