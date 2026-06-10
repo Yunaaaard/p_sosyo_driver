@@ -49,11 +49,17 @@ class ReceiptDetailsController extends GetxController {
           data = data['record'] as Map<String, dynamic>;
         }
         
-        // 3. Reference Number (id/reference_id)
-        referenceNumber.value = data['id'] ?? data['reference_id'] ?? '';
+        // 3. Reference Number (supports both receipt and loan QR payloads)
+        referenceNumber.value = _pickString(data, [
+          'referenceNumber',
+          'reference_number',
+          'loanId',
+          'id',
+          'reference_id',
+        ]);
         
         // 4. Amount Format (e.g. 10000.0 -> 10,000.00)
-        final rawAmount = data['amount'];
+        final rawAmount = data['totalAmount'] ?? data['amount'];
         if (rawAmount is num) {
           totalAmount.value = _formatAmount(rawAmount.toDouble());
         } else if (rawAmount is String) {
@@ -70,9 +76,14 @@ class ReceiptDetailsController extends GetxController {
         // 5. Sender / Customer Name
         final metadata = data['metadata'];
         if (metadata is Map<String, dynamic>) {
-          sender.value = metadata['customer_name'] ?? '';
+          sender.value = _pickString(metadata, ['customer_name', 'sender', 'name']);
         } else {
-          sender.value = '';
+          sender.value = _pickString(data, [
+            'sender',
+            'principalTitle',
+            'customer_name',
+            'customerName',
+          ]);
         }
 
         // 6. Receiver / Payment Channel
@@ -91,8 +102,8 @@ class ReceiptDetailsController extends GetxController {
         }
 
         // 7. Date Format (e.g. "2026-05-05T08:12:33.001Z" -> "May 5, 2026")
-        final createdStr = data['created'];
-        if (createdStr != null && createdStr.isNotEmpty) {
+        final createdStr = _pickString(data, ['date', 'appliedDate', 'created']);
+        if (createdStr.isNotEmpty) {
           try {
             final dateTime = DateTime.parse(createdStr);
             final months = [
@@ -112,6 +123,19 @@ class ReceiptDetailsController extends GetxController {
         debugPrint('Error parsing scanned QR receipt JSON: $e');
       }
     }
+  }
+
+  String _pickString(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value != null) {
+        final text = value.toString().trim();
+        if (text.isNotEmpty) {
+          return text;
+        }
+      }
+    }
+    return '';
   }
 
   String _formatAmount(double amount) {

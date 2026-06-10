@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
 import 'package:p_sosyo_driver/app/data/models/order_item.dart';
 import 'package:p_sosyo_driver/app/modules/order_details/controller/order_details_controller.dart';
@@ -183,6 +186,33 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
 
   void _showPaymentReceiptDialog(BuildContext context) {
     final receiptAmount = controller.formattedTotalAmount.replaceFirst('₱ ', '').trim();
+    final qrPayload = jsonEncode({
+      "loanId": "AL-025NUT",
+      "principalTitle": "Nutriasia",
+      "appliedDate": "2026-04-15",
+      "dueDate": "2026-05-31",
+      "status": "active",
+      "totalProducts": 100,
+      "totalAmount": 234.12,
+      "products": [
+        {
+          "sku": "LME-SOY-200",
+          "description": "Soy Sauce 200g",
+          "category": "LME",
+          "qty": 12,
+          "unitPrice": 8.89,
+          "totalPrice": 106.68
+        },
+        {
+          "sku": "LME-CHI-060",
+          "description": "Chili Sauce 60g",
+          "category": "LME",
+          "qty": 24,
+          "unitPrice": 5.31,
+          "totalPrice": 127.44
+        }
+      ]
+    });
 
     Get.dialog(
       Dialog(
@@ -226,11 +256,19 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                                 ),
                               ],
                             ),
-                            child: Image.asset(
-                              'assets/images/sample-qr.png',
-                              width: 250,
-                              height: 250,
-                              fit: BoxFit.contain,
+                            child: QrImageView(
+                              data: qrPayload,
+                              version: QrVersions.auto,
+                              size: 250,
+                              backgroundColor: Colors.white,
+                              eyeStyle: const QrEyeStyle(
+                                eyeShape: QrEyeShape.square,
+                                color: Color(0xFF2F333A),
+                              ),
+                              dataModuleStyle: const QrDataModuleStyle(
+                                dataModuleShape: QrDataModuleShape.square,
+                                color: Color(0xFF2F333A),
+                              ),
                             ),
                           ),
                         ),
