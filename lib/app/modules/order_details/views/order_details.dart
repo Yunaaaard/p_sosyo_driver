@@ -47,7 +47,13 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
         color: const Color(0xFFF6F6F8),
         padding: const EdgeInsets.all(16),
         child: ElevatedButton(
-          onPressed: () => Get.toNamed(AppRoutes.receiptDetails),
+          onPressed: () => Get.toNamed(
+              AppRoutes.receiptDetails,
+              arguments: {
+                'expected_payment_reference': '099909111',
+                'expected_reference_id': 'AL-025NES',
+              },
+            ),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF6533E7),
             foregroundColor: Colors.white,
@@ -187,13 +193,14 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
   void _showPaymentReceiptDialog(BuildContext context) {
     final receiptAmount = controller.formattedTotalAmount.replaceFirst('₱ ', '').trim();
     final qrPayload = jsonEncode({
-      "loanId": "AL-025NUT",
-      "principalTitle": "Nutriasia",
-      "appliedDate": "2026-04-15",
-      "dueDate": "2026-05-31",
+      "ReferenceID": "AL-025NES",
+      "principalTitle": "Nestle",
+      "payment_reference": "099909111",
+      "appliedDate": "2026-06-10",
+      "dueDate": "2026-07-31",
       "status": "active",
-      "totalProducts": 100,
-      "totalAmount": 234.12,
+      "totalProducts": 100, 
+      "totalAmount": 500,
       "products": [
         {
           "sku": "LME-SOY-200",
@@ -201,7 +208,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
           "category": "LME",
           "qty": 12,
           "unitPrice": 8.89,
-          "totalPrice": 106.68
+          "totalPrice": 250
         },
         {
           "sku": "LME-CHI-060",
@@ -209,7 +216,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
           "category": "LME",
           "qty": 24,
           "unitPrice": 5.31,
-          "totalPrice": 127.44
+          "totalPrice": 250
         }
       ]
     });

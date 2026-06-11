@@ -249,6 +249,18 @@ class DatabaseService extends GetxService {
     );
   }
 
+  /// Returns true if the given reference number already exists in the receipts table.
+  Future<bool> isReferenceNumberUsed(String referenceNumber) async {
+    final results = await _db.query(
+      'receipts',
+      columns: ['id'],
+      where: 'reference_number = ?',
+      whereArgs: [referenceNumber],
+      limit: 1,
+    );
+    return results.isNotEmpty;
+  }
+
   Future<int> insertReceipt(Receipt receipt) async {
     return await _db.insert('receipts', receipt.toMap());
   }
