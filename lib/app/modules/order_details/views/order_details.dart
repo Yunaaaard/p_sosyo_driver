@@ -193,8 +193,8 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
   void _showPaymentReceiptDialog(BuildContext context) {
     final receiptAmount = controller.formattedTotalAmount.replaceFirst('₱ ', '').trim();
     final qrPayload = jsonEncode({
-      "ReferenceID": "AL-025NES",
-      "principalTitle": "Nestle",
+      "ReferenceID": "AL-025NUT",
+      "principalTitle": "Nutriasia",
       "payment_reference": "099909111",
       "appliedDate": "2026-06-10",
       "dueDate": "2026-07-31",
