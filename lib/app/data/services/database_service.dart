@@ -17,7 +17,7 @@ class DatabaseService extends GetxService {
 
     _db = await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -74,49 +74,47 @@ class DatabaseService extends GetxService {
       fullName: 'Juan Dela Cruz',
       pin: '123456',
     ).toMap());
+    await _seedOrderItems(db);
+    debugPrint('DatabaseService: Seeded default driver and order items.');
+  }
+
+  Future<void> _seedOrderItems(Database db) async {
     final defaultItems = [
       OrderItem(
         deliveryOrderId: '1',
         title: 'NESCAFE CLASSIC COFFEE REFILL | 170G',
-        price: 123.00,
-        orderedQty: '23PC',
-        totalAmount: 1839.00,
+        price: 189.75,
+        orderedQty: '15PC',
       ),
       OrderItem(
         deliveryOrderId: '1',
         title: 'BEAR BRAND STERILIZED MILK 200ML',
-        price: 123.00,
-        orderedQty: '23PC',
-        totalAmount: 1839.00,
+        price: 42.50,
+        orderedQty: '36PC',
       ),
       OrderItem(
         deliveryOrderId: '1',
         title: 'READY-TO-DRINK CAPPUCCINO',
-        price: 123.00,
-        orderedQty: '23PC',
-        totalAmount: 1839.00,
+        price: 55.00,
+        orderedQty: '24PC',
       ),
       OrderItem(
         deliveryOrderId: '1',
         title: 'SUGARFREE CREAMY WHITE',
-        price: 123.00,
-        orderedQty: '23PC',
-        totalAmount: 1839.00,
+        price: 78.25,
+        orderedQty: '18PC',
       ),
       OrderItem(
         deliveryOrderId: '1',
         title: 'NESCAFÉ® ORIGINAL',
-        price: 123.00,
-        orderedQty: '23PC',
-        totalAmount: 1839.00,
+        price: 134.50,
+        orderedQty: '12PC',
       ),
     ];
 
     for (final item in defaultItems) {
       await db.insert('order_items', item.toMap());
     }
-
-    debugPrint('DatabaseService: Seeded default driver and order items.');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -124,6 +122,12 @@ class DatabaseService extends GetxService {
       await db.execute(
         'ALTER TABLE drivers ADD COLUMN is_authenticated INTEGER NOT NULL DEFAULT 0',
       );
+    }
+    if (oldVersion < 3) {
+      // Re-seed order items with corrected data
+      await db.delete('order_items');
+      await _seedOrderItems(db);
+      debugPrint('DatabaseService: Re-seeded order items for v3 upgrade.');
     }
   }
 

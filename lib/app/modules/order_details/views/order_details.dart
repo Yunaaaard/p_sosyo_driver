@@ -192,33 +192,29 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
 
   void _showPaymentReceiptDialog(BuildContext context) {
     final receiptAmount = controller.formattedTotalAmount.replaceFirst('₱ ', '').trim();
+    final qrProducts = controller.items.map((item) {
+      final qtyMatch = RegExp(r'\d+').stringMatch(item.orderedQty);
+      final qty = qtyMatch != null ? int.parse(qtyMatch) : 0;
+      return {
+        "sku": item.title,
+        "description": item.title,
+        "category": "NES",
+        "qty": qty,
+        "unitPrice": item.price,
+        "totalPrice": item.totalAmount,
+      };
+    }).toList();
+
     final qrPayload = jsonEncode({
-      "ReferenceID": "AL-025NUT",
-      "principalTitle": "Nutriasia",
+      "ReferenceID": "AL-025NES",
+      "principalTitle": "Nestle",
       "payment_reference": "099909111",
       "appliedDate": "2026-06-10",
       "dueDate": "2026-07-31",
       "status": "active",
-      "totalProducts": 100, 
-      "totalAmount": 500,
-      "products": [
-        {
-          "sku": "LME-SOY-200",
-          "description": "Soy Sauce 200g",
-          "category": "LME",
-          "qty": 12,
-          "unitPrice": 8.89,
-          "totalPrice": 250
-        },
-        {
-          "sku": "LME-CHI-060",
-          "description": "Chili Sauce 60g",
-          "category": "LME",
-          "qty": 24,
-          "unitPrice": 5.31,
-          "totalPrice": 250
-        }
-      ]
+      "totalProducts": controller.totalSku,
+      "totalAmount": controller.totalAmount,
+      "products": qrProducts,
     });
 
     Get.dialog(
