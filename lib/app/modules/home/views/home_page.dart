@@ -401,8 +401,8 @@ class HomePage extends GetView<HomeController> {
           svgPath != null
               ? SvgPicture.asset(
                   svgPath,
-                  width: 16,
-                  height: 16,
+                  width: 15,
+                  height: 15,
                   colorFilter: const ColorFilter.mode(
                     Color(0xFFB8BCC5),
                     BlendMode.srcIn,

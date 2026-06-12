@@ -7,13 +7,13 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   const CustomAppBar({
     super.key,
-    this.title = 'PSOSYO',
+    this.title = 'PESOPAQ',
     this.showBackButton = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bool isDefaultLogo = title == 'PSOSYO';
+    final bool isDefaultLogo = title == 'PESOPAQ';
 
     return Container(
       decoration: const BoxDecoration(
