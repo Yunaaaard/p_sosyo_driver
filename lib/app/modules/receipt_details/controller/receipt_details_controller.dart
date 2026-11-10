@@ -2,10 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
+import 'package:p_sosyo_driver/app/data/models/receipt.dart';
+import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/data/services/scanner_service.dart';
 import 'package:p_sosyo_driver/app/modules/home/controller/home_controller.dart';
 
 class ReceiptDetailsController extends GetxController {
+  DeliveryOrder? order;
   final RxString referenceNumber = ''.obs;
   final RxString totalAmount = ''.obs;
   final RxString sender = ''.obs;
@@ -14,6 +18,14 @@ class ReceiptDetailsController extends GetxController {
   final RxBool isScanned = false.obs;
 
   final ScannerService _scannerService = Get.find<ScannerService>();
+
+  @override
+  void onInit() {
+    super.onInit();
+    if (Get.arguments is DeliveryOrder) {
+      order = Get.arguments as DeliveryOrder;
+    }
+  }
 
   Future<String> _fetchUrl(String url) async {
     final client = HttpClient();
@@ -131,14 +143,34 @@ class ReceiptDetailsController extends GetxController {
     return '${sb.toString()}.$decimalPart';
   }
 
-  void tagAsDelivered() {
+  Future<void> tagAsDelivered() async {
     if (!isScanned.value) return;
+
+    final targetOrderId = order?.transactionId ?? order?.id ?? '1';
 
     try {
       final HomeController homeController = Get.find<HomeController>();
-      homeController.markOrderAsDelivered('1');
+      await homeController.markOrderAsDelivered(targetOrderId);
     } catch (e) {
       debugPrint('Error accessing HomeController: $e');
+    }
+
+    try {
+      final cleanAmount = totalAmount.value.replaceAll(',', '').trim();
+      final parsedAmount = double.tryParse(cleanAmount) ?? 0.0;
+      await DatabaseService.to.insertReceipt(
+        Receipt(
+          deliveryOrderId: targetOrderId,
+          referenceNumber: referenceNumber.value,
+          totalAmount: parsedAmount,
+          sender: sender.value,
+          receiver: receiver.value,
+          date: date.value,
+          scannedAt: DateTime.now().toIso8601String(),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error saving receipt: $e');
     }
 
     // Show a beautiful, stylized dialog

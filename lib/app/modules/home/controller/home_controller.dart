@@ -2,21 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
+import 'package:p_sosyo_driver/app/data/services/driver_sync_service.dart';
 
 class HomeController extends GetxController {
   final RxString activeTab = "Out for Delivery".obs;
 
-  final RxList<DeliveryOrder> orders = <DeliveryOrder>[
-    DeliveryOrder(
-      id: '1',
-      storeName: 'TINDAHAN NI ALING NENA',
-      address: 'Fast Distribution Head Office H. Abellana Canduman, Mandaue City Cebu',
-      distance: '12m away',
-      sku: '32',
-      totalAmount: '₱ 23,893.12',
-      status: 'Out for Delivery',
-    ),
-  ].obs;
+  final RxList<DeliveryOrder> orders = <DeliveryOrder>[].obs;
 
   final RxInt deliveredCount = 0.obs;
   final RxDouble totalSales = 0.0.obs;
@@ -24,44 +15,45 @@ class HomeController extends GetxController {
   // Syncing states
   final RxBool isSyncing = false.obs;
   final RxBool isSyncCompleted = false.obs;
+  final RxString syncStatusMessage = ''.obs;
 
   @override
   void onInit() {
     super.onInit();
-    _loadOrderTotals();
+    loadOrdersFromDb();
   }
 
-  Future<void> _loadOrderTotals() async {
+  Future<void> loadOrdersFromDb() async {
     try {
       final dbService = DatabaseService.to;
-      for (var i = 0; i < orders.length; i++) {
-        final order = orders[i];
-        final items = await dbService.getOrderItems(order.id);
-        if (items.isNotEmpty) {
-          final totalSku = items.length;
-          double totalAmount = 0.0;
-          for (final item in items) {
-            totalAmount += item.totalAmount;
-          }
-          final parts = totalAmount.toStringAsFixed(2).split('.');
-          final regExp = RegExp(r'\B(?=(\d{3})+(?!\d))');
-          parts[0] = parts[0].replaceAllMapped(regExp, (Match m) => ',');
-          final formattedAmount = '₱ ${parts.join('.')}';
-
-          orders[i] = DeliveryOrder(
-            id: order.id,
-            storeName: order.storeName,
-            address: order.address,
-            distance: order.distance,
-            sku: totalSku.toString(),
-            totalAmount: formattedAmount,
-            status: order.status.value,
-          );
-        }
+      final dbOrders = await dbService.getAllDeliveryOrders();
+      if (dbOrders.isNotEmpty) {
+        orders.assignAll(dbOrders);
+        _recalculateTotals();
       }
     } catch (e) {
-      debugPrint('Error loading order totals in HomeController: $e');
+      debugPrint('Error loading orders from DB in HomeController: $e');
     }
+  }
+
+  void _recalculateTotals() {
+    int delivered = 0;
+    double sales = 0.0;
+
+    for (final order in orders) {
+      if (order.status.value == 'Delivered') {
+        delivered++;
+        final cleanAmountStr = order.totalAmount
+            .replaceAll('₱', '')
+            .replaceAll(',', '')
+            .trim();
+        final amount = double.tryParse(cleanAmountStr) ?? 0.0;
+        sales += amount;
+      }
+    }
+
+    deliveredCount.value = delivered;
+    totalSales.value = sales;
   }
 
   @override
@@ -76,34 +68,59 @@ class HomeController extends GetxController {
     activeTab.value = tabName;
   }
 
-  void markOrderAsDelivered(String orderId) {
-    final index = orders.indexWhere((order) => order.id == orderId);
+  Future<void> markOrderAsDelivered(String orderId) async {
+    final index = orders.indexWhere(
+        (order) => order.id == orderId || order.transactionId == orderId);
     if (index != -1 && orders[index].status.value != 'Delivered') {
       orders[index].status.value = 'Delivered';
-      deliveredCount.value += 1;
-
-      // Parse totalAmount ('₱ 23,893.12' -> 23893.12) to add to totalSales
-      final cleanAmountStr = orders[index].totalAmount
-          .replaceAll('₱', '')
-          .replaceAll(',', '')
-          .trim();
-      final amount = double.tryParse(cleanAmountStr) ?? 0.0;
-      totalSales.value += amount;
+      await DatabaseService.to.updateDeliveryOrderStatus(orderId, 'Delivered');
+      _recalculateTotals();
     }
   }
 
   Future<void> syncDeliveries() async {
     isSyncing.value = true;
-    await Future.delayed(const Duration(seconds: 2));
-    isSyncing.value = false;
-    isSyncCompleted.value = true;
-    await Future.delayed(const Duration(milliseconds: 800));
-    Get.back(); // Close dialog
+    syncStatusMessage.value = 'Connecting to server and fetching advance orders...';
+
+    try {
+      final result = await DriverSyncService.to.syncAdvanceOrders();
+      await loadOrdersFromDb();
+
+      if (result.success) {
+        isSyncing.value = false;
+        isSyncCompleted.value = true;
+        syncStatusMessage.value = result.orderCount > 0
+            ? '${result.orderCount} delivery orders synced successfully.'
+            : 'Your delivery orders are now up to date.';
+        await Future.delayed(const Duration(milliseconds: 1000));
+        Get.back(); // Close dialog
+      } else {
+        isSyncing.value = false;
+        syncStatusMessage.value = result.message;
+        Get.snackbar(
+          'Sync Notice',
+          result.message,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFFFFF3CD),
+          colorText: const Color(0xFF856404),
+          margin: const EdgeInsets.all(16),
+          borderRadius: 12,
+          duration: const Duration(seconds: 3),
+        );
+        await Future.delayed(const Duration(milliseconds: 1200));
+        Get.back(); // Close dialog so driver can continue offline
+      }
+    } catch (e) {
+      isSyncing.value = false;
+      debugPrint('Sync error: $e');
+      Get.back();
+    }
   }
 
   void showSyncDialog() {
     isSyncing.value = false;
     isSyncCompleted.value = false;
+    syncStatusMessage.value = '';
 
     Get.dialog(
       Dialog(
@@ -152,7 +169,7 @@ class HomeController extends GetxController {
                           ),
                   ),
                 const SizedBox(height: 20),
-                
+
                 // Title
                 Text(
                   isSyncCompleted.value
@@ -168,13 +185,17 @@ class HomeController extends GetxController {
                   ),
                 ),
                 const SizedBox(height: 10),
-                
+
                 // Subtitle
                 Text(
                   isSyncCompleted.value
-                      ? 'Your delivery orders are now up to date.'
+                      ? syncStatusMessage.value.isNotEmpty
+                          ? syncStatusMessage.value
+                          : 'Your delivery orders are now up to date.'
                       : isSyncing.value
-                          ? 'Please wait while we sync your order schedule and route information.'
+                          ? syncStatusMessage.value.isNotEmpty
+                              ? syncStatusMessage.value
+                              : 'Please wait while we sync your order schedule and route information.'
                           : 'In order to get the new orders from the customer you need to sync first by clicking the Sync Now Button',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
@@ -185,7 +206,7 @@ class HomeController extends GetxController {
                   ),
                 ),
                 const SizedBox(height: 24),
-                
+
                 // Button
                 if (!isSyncing.value && !isSyncCompleted.value)
                   SizedBox(

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
+import 'package:p_sosyo_driver/app/data/services/driver_sync_service.dart';
 import 'package:p_sosyo_driver/app/data/services/scanner_service.dart';
 import 'app/routes/app_pages.dart';
 import 'app/routes/app_routes.dart';
@@ -19,6 +20,7 @@ void main() async {
   // Initialize global services
   await Get.putAsync(() => DatabaseService().init());
   Get.put(ScannerService());
+  Get.put(DriverSyncService());
 
   final initialRoute = await _resolveInitialRoute();
 

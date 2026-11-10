@@ -44,7 +44,8 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
         color: const Color(0xFFF6F6F8),
         padding: const EdgeInsets.all(16),
         child: ElevatedButton(
-          onPressed: () => Get.toNamed(AppRoutes.receiptDetails),
+          onPressed: () => Get.toNamed(AppRoutes.receiptDetails,
+              arguments: controller.order),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF6533E7),
             foregroundColor: Colors.white,
@@ -123,23 +124,23 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                 ),
               ),
               const SizedBox(width: 14),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'TINDAHAN NI ALING NENA',
-                      style: TextStyle(
+                      controller.storeName,
+                      style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF2F333A),
                       ),
                     ),
-                    SizedBox(height: 6),
+                    const SizedBox(height: 6),
                     Text(
-                      'Fast Distribution Head Office H. Abellana Canduman, Mandaue City Cebu',
-                      style: TextStyle(
+                      controller.address,
+                      style: const TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 13,
                         height: 1.3,
