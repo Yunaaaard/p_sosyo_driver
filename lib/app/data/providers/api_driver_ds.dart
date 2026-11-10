@@ -7,11 +7,14 @@ class ApiDriverDs {
   static Future<List<Map<dynamic, dynamic>>> getAdvanceOrders({
     required String distCode,
     required String mdCode,
-    required String deliveryDate,
+    String? deliveryDate,
     String dynamicRouting = 'Y',
     int status = 8,
   }) async {
-    final query = 'get/getAdvanceOrders/v2?distCode=$distCode&mdCode=$mdCode&deliveryDate=$deliveryDate&dynamicRouting=$dynamicRouting&status=$status';
+    String query = 'get/getAdvanceOrders/v2?distCode=$distCode&mdCode=$mdCode&dynamicRouting=$dynamicRouting&status=$status';
+    if (deliveryDate != null && deliveryDate.isNotEmpty) {
+      query += '&deliveryDate=$deliveryDate';
+    }
     debugPrint('[ApiDriverDs] Fetching Advance Orders: $query');
     return await ApiClient.getList(query);
   }

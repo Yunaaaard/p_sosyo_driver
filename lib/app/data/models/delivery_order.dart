@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 class DeliveryOrder {
   final String id;
   final String transactionId;
+  final String custCode;
+  final String storePhoto;
   final String storeName;
   final String address;
   final String distance;
@@ -16,6 +18,8 @@ class DeliveryOrder {
   DeliveryOrder({
     required this.id,
     String? transactionId,
+    String? custCode,
+    String? storePhoto,
     required this.storeName,
     required this.address,
     required this.distance,
@@ -26,6 +30,8 @@ class DeliveryOrder {
     this.latitude,
     this.longitude,
   })  : transactionId = transactionId ?? id,
+        custCode = custCode ?? '',
+        storePhoto = storePhoto ?? '',
         deliveryDate = deliveryDate ?? '',
         status = status.obs;
 
@@ -33,6 +39,8 @@ class DeliveryOrder {
     return DeliveryOrder(
       id: map['id'].toString(),
       transactionId: map['transaction_id']?.toString() ?? map['id'].toString(),
+      custCode: map['cust_code']?.toString() ?? '',
+      storePhoto: map['store_photo']?.toString() ?? '',
       storeName: map['store_name']?.toString() ?? 'Store',
       address: map['address']?.toString() ?? '',
       distance: map['distance']?.toString() ?? '',
@@ -58,6 +66,8 @@ class DeliveryOrder {
     return {
       'id': id,
       'transaction_id': transactionId,
+      'cust_code': custCode,
+      'store_photo': storePhoto,
       'store_name': storeName,
       'address': address,
       'distance': distance,

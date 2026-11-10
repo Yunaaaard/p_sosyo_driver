@@ -5,8 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  static const String defaultHost = 'fastdevs-api.com';
-  static const String defaultDistCode = 'PDB';
+  static const String defaultHost = 'api.ravamate.com/RAVAMATE_SANDBOX';
+  static const String defaultDistCode = 'SANDBOX01';
+  static const String defaultDriverCode = 'SBRM007';
 
   static const String keyHost = 'server_host';
   static const String keyDistCode = 'server_dist_code';
@@ -37,7 +38,7 @@ class ApiClient {
 
   static Future<String> getDriverCode() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(keyDriverCode) ?? 'SMB0012';
+    return prefs.getString(keyDriverCode) ?? defaultDriverCode;
   }
 
   static Future<void> setDriverCode(String driverCode) async {
@@ -97,5 +98,32 @@ class ApiClient {
       return [];
     }
   }
-}
 
+  /// Verify driver credentials against RavaMate backend API.
+  /// If [password] is '123' (developer shortcut), it also attempts the known
+  /// backend test password 'k1m123' for the driver.
+  static Future<Map<String, dynamic>?> verifyDriver(
+    String username,
+    String password,
+  ) async {
+    final distCode = await getDistCode();
+
+    // 1. Direct query with entered password
+    var results = await getList(
+      'login?distCode=$distCode&mdCode=$username&mdpassword=$password',
+    );
+
+    // 2. Fallback for hardcoded developer password '123' -> checks 'k1m123'
+    if (results.isEmpty && (password == '123' || password == 'k1m123')) {
+      final altPassword = password == '123' ? 'k1m123' : '123';
+      results = await getList(
+        'login?distCode=$distCode&mdCode=$username&mdpassword=$altPassword',
+      );
+    }
+
+    if (results.isNotEmpty) {
+      return Map<String, dynamic>.from(results.first);
+    }
+    return null;
+  }
+}

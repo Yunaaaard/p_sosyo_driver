@@ -20,32 +20,41 @@ class OrderDetailsController extends GetxController {
     _loadOrderItems();
   }
 
-  String get storeName => order?.storeName ?? 'TINDAHAN NI ALING NENA';
+  String get storeName => order?.storeName ?? 'Store';
 
-  String get address =>
-      order?.address ??
-      'Fast Distribution Head Office H. Abellana Canduman, Mandaue City Cebu';
+  String get address => order?.address ?? '';
 
-  String get orderId => order?.transactionId ?? order?.id ?? '1';
+  String get orderId => order?.id ?? order?.transactionId ?? '';
+
+  String get custCode => order?.custCode ?? '';
+
+  String get storePhoto => order?.storePhoto ?? '';
 
   /// Load order items from the database for the active order.
   Future<void> _loadOrderItems() async {
     try {
       isLoading.value = true;
       final targetId = orderId;
-      var loadedItems = await _dbService.getOrderItems(targetId);
+      final Set<String> targetIds = {
+        if (targetId.isNotEmpty) targetId,
+        if (order != null && order!.transactionId.isNotEmpty) order!.transactionId,
+        if (order != null && order!.id.isNotEmpty) order!.id,
+      };
 
-      // Fallback: If not found by transactionId, try by order.id
-      if (loadedItems.isEmpty && order != null && order!.id != targetId) {
-        loadedItems = await _dbService.getOrderItems(order!.id);
+      final List<OrderItem> allLoaded = [];
+      for (final id in targetIds) {
+        final queryResults = await _dbService.getOrderItems(id);
+        allLoaded.addAll(queryResults);
       }
 
-      // Fallback: If still empty and in offline demo mode, load seeded items '1'
-      if (loadedItems.isEmpty && targetId == '1') {
-        loadedItems = await _dbService.getOrderItems('1');
+      // Deduplicate items by stockCode or title to prevent duplicate cards
+      final Map<String, OrderItem> uniqueItems = {};
+      for (final item in allLoaded) {
+        final key = item.stockCode.isNotEmpty ? item.stockCode : item.title;
+        uniqueItems[key] = item;
       }
 
-      items.assignAll(loadedItems);
+      items.assignAll(uniqueItems.values.toList());
     } catch (e) {
       debugPrint('Error loading order items: $e');
     } finally {

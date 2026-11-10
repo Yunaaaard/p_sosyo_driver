@@ -20,15 +20,18 @@ class SyncResult {
   });
 }
 
+typedef SyncProgressCallback = void Function(double progress, String message);
+
 class DriverSyncService extends GetxService {
   static DriverSyncService get to => Get.find<DriverSyncService>();
 
   final DatabaseService _dbService = DatabaseService.to;
 
   /// Sync advance orders and their items from backend API.
-  Future<SyncResult> syncAdvanceOrders() async {
+  Future<SyncResult> syncAdvanceOrders({SyncProgressCallback? onProgress}) async {
     try {
       debugPrint('[DriverSyncService] Starting sync...');
+      onProgress?.call(0.12, 'Connecting to dispatch server...');
 
       // 1. Resolve Driver Credentials & Settings
       final authenticatedDriver = await _dbService.getAuthenticatedDriver();
@@ -39,6 +42,7 @@ class DriverSyncService extends GetxService {
       debugPrint('[DriverSyncService] Driver: $driverCode, Dist: $distCode, Date: $todayStr');
 
       // 2. Fetch Customers for this driver (to enrich names, addresses, coordinates)
+      onProgress?.call(0.28, 'Locating store destinations...');
       Map<String, Map<dynamic, dynamic>> customerMap = {};
       try {
         final customers = await ApiDriverDs.getDynamicRouteCustomers(
@@ -57,12 +61,12 @@ class DriverSyncService extends GetxService {
       }
 
       // 3. Fetch Advance Order Headers
+      onProgress?.call(0.55, 'Loading delivery orders & packages...');
       List<Map<dynamic, dynamic>> orderHeaders = [];
       try {
         orderHeaders = await ApiDriverDs.getAdvanceOrders(
           distCode: distCode,
           mdCode: driverCode,
-          deliveryDate: todayStr,
         );
         debugPrint('[DriverSyncService] Fetched ${orderHeaders.length} advance order headers');
       } catch (e) {
@@ -74,6 +78,7 @@ class DriverSyncService extends GetxService {
       }
 
       // 4. Fetch Advance Order Items
+      onProgress?.call(0.75, 'Preparing items & product manifests...');
       List<Map<dynamic, dynamic>> orderItemsRaw = [];
       try {
         orderItemsRaw = await ApiDriverDs.getAdvanceOrderItems(
@@ -96,15 +101,25 @@ class DriverSyncService extends GetxService {
 
       // 5. If no headers came back from API, return status
       if (orderHeaders.isEmpty) {
-        debugPrint('[DriverSyncService] No advance orders returned from server for today ($todayStr).');
+        debugPrint('[DriverSyncService] No advance orders returned from server for driver $driverCode.');
         return SyncResult(
           success: true,
-          message: 'Sync completed. No new orders found for today.',
+          message: 'Sync completed. No new orders found for driver $driverCode.',
           orderCount: 0,
         );
       }
 
       // 6. Map headers and items to local models
+      // Deduplicate order headers by refno so unique orders match dashboard cards exactly
+      final Map<String, Map<dynamic, dynamic>> uniqueHeaders = {};
+      for (final header in orderHeaders) {
+        final refno = (header['refno']?.toString() ?? header['transactionID']?.toString() ?? '').trim();
+        if (refno.isNotEmpty) {
+          uniqueHeaders[refno] = header;
+        }
+      }
+      final dedupedHeaders = uniqueHeaders.values.toList();
+
       // Check existing orders in DB to preserve status (e.g. if already Delivered locally)
       final existingOrders = await _dbService.getAllDeliveryOrders();
       final Map<String, String> existingStatuses = {
@@ -115,19 +130,35 @@ class DriverSyncService extends GetxService {
       final List<DeliveryOrder> ordersToSave = [];
       final List<OrderItem> itemsToSave = [];
 
-      for (int i = 0; i < orderHeaders.length; i++) {
-        final header = orderHeaders[i];
+      for (int i = 0; i < dedupedHeaders.length; i++) {
+        final header = dedupedHeaders[i];
         final txnId = header['transactionID']?.toString() ?? 'TXN-${i + 1}';
-        final custCode = header['custCode']?.toString() ?? '';
+        final refno = header['refno']?.toString() ?? txnId;
+        final custCode = (header['custCode']?.toString() ??
+                header['STOREID']?.toString() ??
+                header['customerCode']?.toString() ??
+                header['cID']?.toString() ??
+                '')
+            .trim();
         final cust = customerMap[custCode];
 
-        final storeName = cust?['custName']?.toString() ??
-            header['storeName']?.toString() ??
-            header['custName']?.toString() ??
-            'Store ($custCode)';
-        final address = cust?['address']?.toString() ??
-            header['address']?.toString() ??
-            'Store Address';
+        // Resolve store photo URL for this customer
+        String storePhotoUrl = '';
+        if (custCode.isNotEmpty) {
+          storePhotoUrl =
+              'https://filezsystem.sgp1.vultrobjects.com/STOREIMAGE/MNC/$distCode/${custCode.toLowerCase()}_1.jpg';
+        }
+
+        final storeName = (header['STORENAME']?.toString() ??
+                cust?['custName']?.toString() ??
+                header['storeName']?.toString() ??
+                header['custName']?.toString() ??
+                'Store ($custCode)')
+            .trim();
+        final address = (cust?['address']?.toString() ??
+                header['address']?.toString() ??
+                'Store Address')
+            .trim();
         final lat = cust?['latitude'] != null
             ? double.tryParse(cust!['latitude'].toString())
             : double.tryParse(header['latitude']?.toString() ?? '');
@@ -145,33 +176,38 @@ class DriverSyncService extends GetxService {
         double computedTotalAmount = 0.0;
         for (final rawItem in txnItems) {
           final stockCode = rawItem['stockCode']?.toString() ?? '';
-          final title = rawItem['Description']?.toString() ??
-              rawItem['productDes']?.toString() ??
-              rawItem['sosyoItemName']?.toString() ??
-              rawItem['title']?.toString() ??
-              'Item $stockCode';
+          final title = (rawItem['PRODUCTDESCRIPTION']?.toString() ??
+                  rawItem['Description']?.toString() ??
+                  rawItem['productDes']?.toString() ??
+                  rawItem['sosyoItemName']?.toString() ??
+                  rawItem['title']?.toString() ??
+                  'Item $stockCode')
+              .trim();
           final price = double.tryParse(rawItem['piecePrice']?.toString() ??
                   rawItem['piecePrice_Gross']?.toString() ??
                   '0') ??
               0.0;
           final qty = rawItem['quantity'] ??
+              rawItem['po'] ??
               rawItem['quantityOrdered'] ??
               rawItem['QUANTITY ORDERED IN PCS'] ??
               1;
-          final uom = rawItem['PurchaseUom']?.toString() ??
-              rawItem['uom']?.toString() ??
-              'PC';
+          final uom = (rawItem['PurchaseUom']?.toString() ??
+                  rawItem['uom']?.toString() ??
+                  rawItem['unit']?.toString() ??
+                  'PC')
+              .trim();
           final itemTotal = double.tryParse(rawItem['totalAmount']?.toString() ?? '') ??
               (price * (double.tryParse(qty.toString()) ?? 1.0));
           computedTotalAmount += itemTotal;
 
           itemsToSave.add(
             OrderItem(
-              deliveryOrderId: txnId,
+              deliveryOrderId: refno,
               stockCode: stockCode,
               title: title,
               price: price,
-              orderedQty: '$qty$uom',
+              orderedQty: '$qty',
               totalAmount: itemTotal,
               uom: uom,
             ),
@@ -182,7 +218,7 @@ class DriverSyncService extends GetxService {
         final finalTotalAmount = headerAmount ?? computedTotalAmount;
 
         // Preserve 'Delivered' if already marked locally
-        final existingStatus = existingStatuses[txnId] ?? existingStatuses[(i + 1).toString()];
+        final existingStatus = existingStatuses[refno] ?? existingStatuses[txnId];
         final status = existingStatus ?? 'Out for Delivery';
 
         final parts = finalTotalAmount.toStringAsFixed(2).split('.');
@@ -192,15 +228,17 @@ class DriverSyncService extends GetxService {
 
         ordersToSave.add(
           DeliveryOrder(
-            id: txnId,
+            id: refno,
             transactionId: txnId,
+            custCode: custCode,
+            storePhoto: storePhotoUrl,
             storeName: storeName,
             address: address,
             distance: 'Ready',
             sku: txnItems.isNotEmpty ? txnItems.length.toString() : (header['sku_count']?.toString() ?? '1'),
             totalAmount: formattedAmount,
             status: status,
-            deliveryDate: header['deliveryDate']?.toString() ?? todayStr,
+            deliveryDate: header['unloadingDate']?.toString() ?? header['deliveryDate']?.toString() ?? todayStr,
             latitude: lat,
             longitude: lng,
           ),
@@ -208,11 +246,13 @@ class DriverSyncService extends GetxService {
       }
 
       // 7. Save batch to SQLite
+      onProgress?.call(0.92, 'Updating offline database & items...');
       await _dbService.saveDeliveryOrdersBatch(ordersToSave);
       if (itemsToSave.isNotEmpty) {
         await _dbService.saveOrderItemsBatch(itemsToSave);
       }
 
+      onProgress?.call(1.0, 'Dispatch ready! Orders updated.');
       debugPrint('[DriverSyncService] Successfully synced ${ordersToSave.length} orders & ${itemsToSave.length} items.');
       return SyncResult(
         success: true,

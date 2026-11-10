@@ -21,10 +21,50 @@ class DatabaseService extends GetxService {
 
     _db = await openDatabase(
       path,
-      version: 3,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+
+    // Clean up any residual mock data 'TINDAHAN NI ALING NENA' or order '1' or legacy transactionID ids
+    await _db.delete('delivery_orders', where: "id = '1' OR transaction_id = 'TXN-001' OR store_name LIKE '%ALING NENA%' OR id LIKE 'UV10%'");
+    await _db.delete('order_items', where: "delivery_order_id = '1' OR delivery_order_id = 'TXN-001' OR delivery_order_id LIKE 'UV10%'");
+
+    // Ensure cust_code and store_photo columns exist in delivery_orders
+    try {
+      await _db.execute('ALTER TABLE delivery_orders ADD COLUMN cust_code TEXT');
+    } catch (_) {}
+    try {
+      await _db.execute('ALTER TABLE delivery_orders ADD COLUMN store_photo TEXT');
+    } catch (_) {}
+
+    // Backfill photos for known sandbox orders if missing
+    try {
+      await _db.execute('''
+        UPDATE delivery_orders
+        SET cust_code = 'DG18159',
+            store_photo = 'https://filezsystem.sgp1.vultrobjects.com/STOREIMAGE/MNC/SANDBOX01/dg18159_1.jpg'
+        WHERE id = 'R92611051' AND (cust_code IS NULL OR cust_code = '')
+      ''');
+      await _db.execute('''
+        UPDATE delivery_orders
+        SET cust_code = 'DG423801',
+            store_photo = 'https://filezsystem.sgp1.vultrobjects.com/STOREIMAGE/MNC/SANDBOX01/dg423801_1.jpg'
+        WHERE id = 'R92611052' AND (cust_code IS NULL OR cust_code = '')
+      ''');
+    } catch (_) {}
+
+    // Deduplicate any duplicate items in existing databases
+    try {
+      await _db.execute('''
+        DELETE FROM order_items
+        WHERE id NOT IN (
+          SELECT MIN(id)
+          FROM order_items
+          GROUP BY delivery_order_id, stock_code
+        )
+      ''');
+    } catch (_) {}
 
     return this;
   }
@@ -47,6 +87,8 @@ class DatabaseService extends GetxService {
       CREATE TABLE delivery_orders (
         id TEXT PRIMARY KEY,
         transaction_id TEXT NOT NULL,
+        cust_code TEXT,
+        store_photo TEXT,
         store_name TEXT NOT NULL,
         address TEXT NOT NULL,
         distance TEXT,
@@ -91,80 +133,13 @@ class DatabaseService extends GetxService {
 
   Future<void> _seedData(Database db) async {
     await db.insert('drivers', Driver(
-      username: 'SMB0012',
+      username: 'SBRM007',
       password: '123',
-      fullName: 'Juan Dela Cruz',
-      pin: '123456',
+      fullName: 'DRP1 - DRP1',
+      pin: '',
     ).toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
 
-    // Initial mock order for offline testing
-    await db.insert('delivery_orders', {
-      'id': '1',
-      'transaction_id': 'TXN-001',
-      'store_name': 'TINDAHAN NI ALING NENA',
-      'address': 'Fast Distribution Head Office H. Abellana Canduman, Mandaue City Cebu',
-      'distance': '12m away',
-      'sku_count': 5,
-      'total_amount': 9195.0,
-      'status': 'Out for Delivery',
-      'delivery_date': DateTime.now().toIso8601String().substring(0, 10),
-      'latitude': 10.3642,
-      'longitude': 123.7885,
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
-
-    final defaultItems = [
-      OrderItem(
-        deliveryOrderId: '1',
-        stockCode: 'NES-001',
-        title: 'NESCAFE CLASSIC COFFEE REFILL | 170G',
-        price: 123.00,
-        orderedQty: '23PC',
-        totalAmount: 1839.00,
-        uom: 'PC',
-      ),
-      OrderItem(
-        deliveryOrderId: '1',
-        stockCode: 'BEA-002',
-        title: 'BEAR BRAND STERILIZED MILK 200ML',
-        price: 123.00,
-        orderedQty: '23PC',
-        totalAmount: 1839.00,
-        uom: 'PC',
-      ),
-      OrderItem(
-        deliveryOrderId: '1',
-        stockCode: 'CAP-003',
-        title: 'READY-TO-DRINK CAPPUCCINO',
-        price: 123.00,
-        orderedQty: '23PC',
-        totalAmount: 1839.00,
-        uom: 'PC',
-      ),
-      OrderItem(
-        deliveryOrderId: '1',
-        stockCode: 'SUG-004',
-        title: 'SUGARFREE CREAMY WHITE',
-        price: 123.00,
-        orderedQty: '23PC',
-        totalAmount: 1839.00,
-        uom: 'PC',
-      ),
-      OrderItem(
-        deliveryOrderId: '1',
-        stockCode: 'NES-005',
-        title: 'NESCAFÉ® ORIGINAL',
-        price: 123.00,
-        orderedQty: '23PC',
-        totalAmount: 1839.00,
-        uom: 'PC',
-      ),
-    ];
-
-    for (final item in defaultItems) {
-      await db.insert('order_items', item.toMap());
-    }
-
-    debugPrint('DatabaseService: Seeded default driver and order items.');
+    debugPrint('DatabaseService: Seeded default driver.');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -197,6 +172,18 @@ class DatabaseService extends GetxService {
       } catch (_) {}
       try {
         await db.execute('ALTER TABLE order_items ADD COLUMN uom TEXT');
+      } catch (_) {}
+    }
+    if (oldVersion < 4) {
+      await db.delete('delivery_orders', where: "id = '1' OR transaction_id = 'TXN-001' OR store_name LIKE '%ALING NENA%'");
+      await db.delete('order_items', where: "delivery_order_id = '1' OR delivery_order_id = 'TXN-001'");
+    }
+    if (oldVersion < 5) {
+      try {
+        await db.execute('ALTER TABLE delivery_orders ADD COLUMN cust_code TEXT');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE delivery_orders ADD COLUMN store_photo TEXT');
       } catch (_) {}
     }
   }
@@ -378,6 +365,8 @@ class DatabaseService extends GetxService {
 
   Future<void> saveDeliveryOrdersBatch(List<DeliveryOrder> orders) async {
     final batch = _db.batch();
+    // Clear old delivery orders to prevent ghost or duplicate records across syncs
+    batch.delete('delivery_orders');
     for (final order in orders) {
       batch.insert(
         'delivery_orders',
@@ -415,7 +404,12 @@ class DatabaseService extends GetxService {
   }
 
   Future<void> saveOrderItemsBatch(List<OrderItem> items) async {
+    if (items.isEmpty) return;
+    final orderIds = items.map((e) => e.deliveryOrderId).toSet();
     final batch = _db.batch();
+    for (final orderId in orderIds) {
+      batch.delete('order_items', where: 'delivery_order_id = ?', whereArgs: [orderId]);
+    }
     for (final item in items) {
       batch.insert(
         'order_items',

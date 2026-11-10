@@ -23,6 +23,7 @@ class PesoFormatter {
     required FontWeight fontWeight,
     required Color color,
   }) {
+    final cleanAmount = amount.replaceAll('₱', '').trim();
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -35,9 +36,9 @@ class PesoFormatter {
             color: color,
           ),
         ),
-        const SizedBox(width: 2),
+        const SizedBox(width: 3),
         Text(
-          amount,
+          cleanAmount,
           style: TextStyle(
             fontFamily: 'Poppins',
             fontSize: fontSize,
@@ -55,12 +56,13 @@ class PesoFormatter {
     required FontWeight fontWeight,
     required Color color,
   }) {
+    final cleanAmount = amount.replaceAll('₱', '').trim();
     return TextSpan(
       children: [
         buildPesoSymbolSpan(fontSize: fontSize, fontWeight: fontWeight, color: color),
         const TextSpan(text: ' '),
         TextSpan(
-          text: amount,
+          text: cleanAmount,
           style: TextStyle(
             fontFamily: 'Poppins',
             fontSize: fontSize,

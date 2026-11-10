@@ -7,6 +7,7 @@ import 'package:p_sosyo_driver/app/data/models/receipt.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/data/services/scanner_service.dart';
 import 'package:p_sosyo_driver/app/modules/home/controller/home_controller.dart';
+import 'package:p_sosyo_driver/app/routes/app_routes.dart';
 
 class ReceiptDetailsController extends GetxController {
   DeliveryOrder? order;
@@ -61,15 +62,24 @@ class ReceiptDetailsController extends GetxController {
           data = data['record'] as Map<String, dynamic>;
         }
         
-        // 3. Reference Number (id/reference_id)
-        referenceNumber.value = data['id'] ?? data['reference_id'] ?? '';
+        // 3. Reference Number (support referenceNumber, reference_number, refno, id, reference_id)
+        referenceNumber.value = (data['referenceNumber'] ??
+                data['reference_number'] ??
+                data['refno'] ??
+                data['id'] ??
+                data['reference_id'] ??
+                '')
+            .toString();
         
         // 4. Amount Format (e.g. 10000.0 -> 10,000.00)
-        final rawAmount = data['amount'];
+        final rawAmount = data['totalAmountSent'] ??
+            data['total_amount_sent'] ??
+            data['totalAmount'] ??
+            data['amount'];
         if (rawAmount is num) {
           totalAmount.value = _formatAmount(rawAmount.toDouble());
         } else if (rawAmount is String) {
-          final parsedDouble = double.tryParse(rawAmount.replaceAll(',', ''));
+          final parsedDouble = double.tryParse(rawAmount.replaceAll(',', '').replaceAll('₱', '').trim());
           if (parsedDouble != null) {
             totalAmount.value = _formatAmount(parsedDouble);
           } else {
@@ -81,39 +91,49 @@ class ReceiptDetailsController extends GetxController {
 
         // 5. Sender / Customer Name
         final metadata = data['metadata'];
-        if (metadata is Map<String, dynamic>) {
+        if (data['sender'] != null && data['sender'].toString().isNotEmpty) {
+          sender.value = data['sender'].toString();
+        } else if (data['customerName'] != null && data['customerName'].toString().isNotEmpty) {
+          sender.value = data['customerName'].toString();
+        } else if (data['customer_name'] != null && data['customer_name'].toString().isNotEmpty) {
+          sender.value = data['customer_name'].toString();
+        } else if (metadata is Map<String, dynamic>) {
           sender.value = metadata['customer_name'] ?? '';
         } else {
           sender.value = '';
         }
 
         // 6. Receiver / Payment Channel
-        final paymentMethod = data['payment_method'];
-        String? channelCode;
-        if (paymentMethod is Map<String, dynamic>) {
-          final ewallet = paymentMethod['ewallet'];
-          if (ewallet is Map<String, dynamic>) {
-            channelCode = ewallet['channel_code'];
+        if (data['receiver'] != null && data['receiver'].toString().isNotEmpty) {
+          receiver.value = data['receiver'].toString();
+        } else {
+          final paymentMethod = data['payment_method'];
+          String? channelCode;
+          if (paymentMethod is Map<String, dynamic>) {
+            final ewallet = paymentMethod['ewallet'];
+            if (ewallet is Map<String, dynamic>) {
+              channelCode = ewallet['channel_code'];
+            }
+          }
+          if (channelCode != null && channelCode.isNotEmpty) {
+            receiver.value = 'FAST SOSYO ($channelCode)';
+          } else {
+            receiver.value = 'FAST SOSYO';
           }
         }
-        if (channelCode != null && channelCode.isNotEmpty) {
-          receiver.value = 'FAST SOSYO ($channelCode)';
-        } else {
-          receiver.value = 'FAST SOSYO NESTLE';
-        }
 
-        // 7. Date Format (e.g. "2026-05-05T08:12:33.001Z" -> "May 5, 2026")
-        final createdStr = data['created'];
-        if (createdStr != null && createdStr.isNotEmpty) {
+        // 7. Date Format
+        final rawDate = (data['date'] ?? data['created'] ?? '').toString();
+        if (rawDate.isNotEmpty) {
           try {
-            final dateTime = DateTime.parse(createdStr);
+            final dateTime = DateTime.parse(rawDate);
             final months = [
               'January', 'February', 'March', 'April', 'May', 'June',
               'July', 'August', 'September', 'October', 'November', 'December'
             ];
             date.value = '${months[dateTime.month - 1]} ${dateTime.day}, ${dateTime.year}';
           } catch (_) {
-            date.value = createdStr;
+            date.value = rawDate;
           }
         } else {
           date.value = '';
@@ -146,7 +166,11 @@ class ReceiptDetailsController extends GetxController {
   Future<void> tagAsDelivered() async {
     if (!isScanned.value) return;
 
-    final targetOrderId = order?.transactionId ?? order?.id ?? '1';
+    final scannedRef = referenceNumber.value.trim();
+    final targetOrderId = (scannedRef.isNotEmpty ? scannedRef : null) ??
+        order?.id ??
+        order?.transactionId ??
+        '';
 
     try {
       final HomeController homeController = Get.find<HomeController>();
@@ -156,7 +180,7 @@ class ReceiptDetailsController extends GetxController {
     }
 
     try {
-      final cleanAmount = totalAmount.value.replaceAll(',', '').trim();
+      final cleanAmount = totalAmount.value.replaceAll(',', '').replaceAll('₱', '').trim();
       final parsedAmount = double.tryParse(cleanAmount) ?? 0.0;
       await DatabaseService.to.insertReceipt(
         Receipt(
@@ -220,8 +244,7 @@ class ReceiptDetailsController extends GetxController {
                 child: ElevatedButton(
                   onPressed: () {
                     Get.back(); // Close dialog
-                    Get.back(); // Pop ReceiptDetailsPage
-                    Get.back(); // Pop OrderDetailsPage (goes back to home)
+                    Get.until((route) => route.settings.name == AppRoutes.home || route.isFirst);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6533E7),

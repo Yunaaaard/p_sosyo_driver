@@ -43,6 +43,21 @@ class OrderItem {
     return '₱ ${parts.join('.')}';
   }
 
+  /// Clean display string for quantity, preventing duplicated UOMs like "2 BG BG" or "2BG BG"
+  String get displayQty {
+    final qtyStr = orderedQty.trim();
+    final uomStr = uom.trim();
+    if (uomStr.isEmpty) return qtyStr;
+    String cleanQty = qtyStr
+        .replaceAll(RegExp(RegExp.escape(uomStr), caseSensitive: false), '')
+        .trim();
+    if (cleanQty.isEmpty) {
+      final digits = RegExp(r'\d+(\.\d+)?').stringMatch(qtyStr);
+      cleanQty = digits ?? '1';
+    }
+    return '$cleanQty $uomStr';
+  }
+
   /// Create an OrderItem from a SQLite row map.
   factory OrderItem.fromMap(Map<String, dynamic> map) {
     return OrderItem(

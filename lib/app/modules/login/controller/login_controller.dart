@@ -91,60 +91,39 @@ class LoginController extends GetxController {
     isLoading.value = true;
 
     try {
-      final isHardcodedPassword = password == '123' || password == 'password123';
       Driver? driver = await _dbService.authenticateDriver(username, password);
 
-      // If driver is not in local DB yet, but password is '123', allow registration / lookup
-      if (driver == null && !isHardcodedPassword) {
-        Get.snackbar(
-          'Login Failed',
-          'Invalid username or password. Please try again.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xFFFFEBEB),
-          colorText: const Color(0xFFD32F2F),
-          margin: const EdgeInsets.all(16),
-          borderRadius: 12,
-          duration: const Duration(seconds: 2),
-        );
-        return;
-      }
+      // If driver is not found in local DB with this password, verify with backend
+      if (driver == null) {
+        final verifiedDriverData = await ApiClient.verifyDriver(username, password);
 
-      // Connecting with RavaMate servercred to fetch distributor info for this mdCode
-      try {
-        final endpoint = 'get/servercred/per/distributor?mdCode=$username';
-        final creds = await ApiClient.getList(endpoint);
-        if (creds.isNotEmpty) {
-          final primary = creds.firstWhere(
-            (e) => e['ip_desc'] == 'PRIMARY',
-            orElse: () => creds.first,
+        if (verifiedDriverData == null) {
+          Get.snackbar(
+            'Account Not Found',
+            'We couldn\'t find an account for "$username". Please double-check your username or contact your admin.',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: const Color(0xFFFFEBEB),
+            colorText: const Color(0xFFD32F2F),
+            margin: const EdgeInsets.all(16),
+            borderRadius: 12,
+            duration: const Duration(seconds: 3),
           );
-          final distCode = primary['distCode']?.toString();
-          if (distCode != null && distCode.isNotEmpty) {
-            await ApiClient.setDistCode(distCode);
-          }
-          final defaultDns = primary['default_dns']?.toString();
-          if (defaultDns != null && defaultDns.isNotEmpty) {
-            await ApiClient.setHost(defaultDns);
-          }
-          debugPrint(
-              '[LoginController] Configured from RavaMate: distCode=$distCode, host=$defaultDns');
+          return;
         }
-      } catch (e) {
-        debugPrint('[LoginController] Note: Servercred fetch skipped or offline: $e');
+
+        final fullName = (verifiedDriverData['mdName']?.toString() ?? 'Driver $username').trim();
+        driver = await _dbService.insertOrUpdateDriver(
+          Driver(
+            username: username,
+            password: password,
+            fullName: fullName.isNotEmpty ? fullName : 'Driver $username',
+            pin: '', // Empty pin prompts 2-step passcode setup
+          ),
+        );
       }
 
       // Save driver's mdCode in preferences for syncing and requests
       await ApiClient.setDriverCode(username);
-
-      // Ensure Driver record exists in SQLite
-      driver ??= await _dbService.insertOrUpdateDriver(
-        Driver(
-          username: username,
-          password: password,
-          fullName: 'Driver $username',
-          pin: '123456',
-        ),
-      );
 
       _currentDriver = driver;
 
