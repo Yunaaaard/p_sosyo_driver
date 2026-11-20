@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/modules/login/controller/login_controller.dart';
 import 'package:p_sosyo_driver/app/routes/app_routes.dart';
@@ -129,8 +130,8 @@ class PinVerificationController extends GetxController {
 
       reset();
       Get.offAllNamed(AppRoutes.home);
-    } catch (e) {
-      debugPrint('PIN setup error: $e');
+    } catch (e, stack) {
+      logError('PIN setup error', e, stack);
       Get.snackbar(
         'Error',
         'An unexpected error occurred. Please try again.',

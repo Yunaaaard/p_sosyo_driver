@@ -1,279 +1,635 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
 import 'package:p_sosyo_driver/app/modules/receipt_details/controller/receipt_details_controller.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_appBar.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_button.dart';
+import 'package:p_sosyo_driver/app/widgets/status_badge.dart';
 
 class ReceiptDetailsPage extends GetView<ReceiptDetailsController> {
   const ReceiptDetailsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final targetOrder = controller.order;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F6F8),
+      backgroundColor: AppColors.canvas,
       appBar: const CustomAppBar(
         title: 'Receipt Details',
         showBackButton: true,
       ),
       body: SafeArea(
+        top: false,
         child: Column(
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24.0),
+                padding: const EdgeInsets.all(AppSpacing.lg),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 10),
-                    // Header card or badge for premium aesthetics
-                    _buildHeaderCard(),
-                    const SizedBox(height: 24),
-                    
-                    // Fields
-                    Obx(() => _buildField(
-                          label: 'Reference Number',
-                          value: controller.referenceNumber.value,
-                          placeholder: 'Scan a receipt to display details',
-                        )),
-                    const SizedBox(height: 18),
-                    Obx(() => _buildAmountField(
-                          label: 'Total Amount Sent',
-                          value: controller.totalAmount.value,
-                          placeholder: 'Scan a receipt to display details',
-                        )),
-                    const SizedBox(height: 18),
-                    Obx(() => _buildField(
-                          label: 'Sender',
-                          value: controller.sender.value,
-                          placeholder: 'Scan a receipt to display details',
-                        )),
-                    const SizedBox(height: 18),
-                    Obx(() => _buildField(
-                          label: 'Date',
-                          value: controller.date.value,
-                          placeholder: 'Scan a receipt to display details',
-                        )),
+                    // ── Rounded Target Order Context Card ──────────────────
+                    if (targetOrder != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceDark,
+                          borderRadius: BorderRadius.circular(AppRadii.lg),
+                          border:
+                              Border.all(color: AppColors.surfaceDarkBorder),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'SETTLING ORDER  ·  #${targetOrder.id}',
+                                    style: AppTypography.monoRef.copyWith(
+                                      fontSize: 13.5,
+                                      color: AppColors.mint,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    targetOrder.storeName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.label.copyWith(
+                                      fontSize: 18.5,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'EXPECTED',
+                                  style: AppTypography.eyebrow.copyWith(
+                                    fontSize: 12.5,
+                                    color: Colors.white.withOpacity(0.65),
+                                  ),
+                                ),
+                                Text.rich(
+                                  PesoFormatter.buildPesoTextSpan(
+                                    amount: targetOrder.totalAmount
+                                        .replaceAll('₱', '')
+                                        .trim(),
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                    ],
+
+                    // ── Rounded E-Receipt Verification Card ────────────────
+                    Obx(() {
+                      final scanned = controller.isScanned.value;
+                      final ref = controller.referenceNumber.value;
+                      final amount = controller.totalAmount.value;
+                      final sender = controller.sender.value;
+                      final date = controller.date.value;
+
+                      final borderColor = scanned
+                          ? AppColors.successBorder
+                          : AppColors.border;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _TicketHalfCard(
+                            isTop: true,
+                            borderColor: borderColor,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                AppSpacing.xl,
+                                AppSpacing.xl,
+                                AppSpacing.xl,
+                                AppSpacing.lg,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      StatusPill(
+                                        label: scanned
+                                            ? 'Receipt Verified'
+                                            : 'Awaiting Scan',
+                                        isPositive: scanned,
+                                        icon: scanned
+                                            ? Icons.check_circle_outline_rounded
+                                            : Icons.qr_code_scanner_rounded,
+                                      ),
+                                      Text(
+                                        'E-RECEIPT',
+                                        style: AppTypography.monoRef.copyWith(
+                                          fontSize: 13.5,
+                                          color: AppColors.inkMuted,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: AppSpacing.xl),
+                                  if (scanned && amount.isNotEmpty) ...[
+                                    Text(
+                                      'TOTAL AMOUNT SENT',
+                                      style: AppTypography.eyebrow.copyWith(
+                                        fontSize: 13.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: PesoFormatter.buildPesoText(
+                                        amount: amount,
+                                        fontSize: 38,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.inkPrimary,
+                                      ),
+                                    ),
+                                  ] else
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: AppSpacing.lg,
+                                        vertical: AppSpacing.xl,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.canvas,
+                                        borderRadius:
+                                            BorderRadius.circular(AppRadii.md),
+                                        border:
+                                            Border.all(color: AppColors.border),
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          const Icon(
+                                            Icons.qr_code_scanner_rounded,
+                                            size: 32,
+                                            color: AppColors.primary,
+                                          ),
+                                          const SizedBox(height: AppSpacing.sm),
+                                          Text(
+                                            'Scan Customer E-Receipt',
+                                            style: AppTypography.title.copyWith(
+                                              fontSize: 20,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Verified payment details and reference number will populate here.',
+                                            textAlign: TextAlign.center,
+                                            style:
+                                                AppTypography.caption.copyWith(
+                                              fontSize: 16.5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          _TicketHalfCard(
+                            isTop: false,
+                            borderColor: borderColor,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                AppSpacing.xl,
+                                AppSpacing.lg,
+                                AppSpacing.xl,
+                                AppSpacing.xl,
+                              ),
+                              child: Column(
+                                children: [
+                                  _LedgerRow(
+                                    label: 'Reference Number',
+                                    value: ref,
+                                    placeholder: 'Pending QR scan',
+                                    isMonospace: true,
+                                  ),
+                                  const Divider(
+                                    height: 24,
+                                    thickness: 1,
+                                    color: AppColors.border,
+                                  ),
+                                  _LedgerRow(
+                                    label: 'Total Amount Sent',
+                                    value: amount,
+                                    placeholder: 'Pending QR scan',
+                                    isPeso: true,
+                                    isMonospace: true,
+                                  ),
+                                  const Divider(
+                                    height: 24,
+                                    thickness: 1,
+                                    color: AppColors.border,
+                                  ),
+                                  _LedgerRow(
+                                    label: 'Sender',
+                                    value: sender,
+                                    placeholder: 'Pending QR scan',
+                                  ),
+                                  const Divider(
+                                    height: 24,
+                                    thickness: 1,
+                                    color: AppColors.border,
+                                  ),
+                                  _LedgerRow(
+                                    label: 'Date',
+                                    value: date,
+                                    placeholder: 'Pending QR scan',
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }),
+                    const SizedBox(height: AppSpacing.md),
+
+                    // ── Local Proof of Delivery Capture Card ───────────────
+                    Obx(() {
+                      final podPath = controller.proofOfDeliveryPath.value;
+                      final hasPod =
+                          podPath.isNotEmpty && File(podPath).existsSync();
+                      final isBusy = controller.isCapturingPod.value;
+
+                      return SurfaceCard(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        borderRadius: AppRadii.xl,
+                        borderColor: hasPod
+                            ? AppColors.successBorder
+                            : AppColors.border,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'PROOF OF DELIVERY',
+                                  style: AppTypography.eyebrow
+                                      .copyWith(fontSize: 13.5),
+                                ),
+                                StatusPill(
+                                  label: hasPod ? 'Photo Saved' : 'Required',
+                                  isPositive: hasPod,
+                                  isDanger: !hasPod,
+                                  icon: hasPod
+                                      ? Icons.check_circle_outline_rounded
+                                      : Icons.camera_alt_outlined,
+                                ),
+                              ],
+                            ),
+                            if (hasPod) ...[
+                              const SizedBox(height: AppSpacing.md),
+                              ClipRRect(
+                                borderRadius:
+                                    BorderRadius.circular(AppRadii.md),
+                                child: Image.file(
+                                  File(podPath),
+                                  height: 160,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: AppSpacing.md),
+                            CustomButton(
+                              label: hasPod
+                                  ? 'Retake Proof of Delivery'
+                                  : 'Capture Proof of Delivery',
+                              icon: Icons.camera_alt_outlined,
+                              variant: CustomButtonVariant.secondary,
+                              height: 46,
+                              isLoading: isBusy,
+                              onPressed: controller.captureProofOfDelivery,
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
                   ],
                 ),
               ),
             ),
-            
-            // Bottom Buttons Container
+
+            // ── Clean Rounded Bottom Action Dock ────────────────────────
             Container(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.lg,
+                AppSpacing.lg,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(AppRadii.xl),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 10,
-                    offset: Offset(0, -2),
+                    color: AppColors.surfaceDark.withOpacity(0.05),
+                    blurRadius: 16,
+                    offset: const Offset(0, -4),
                   ),
                 ],
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CustomButton(
-                    label: 'Scan Customer Receipt',
-                    onPressed: controller.startScanning,
-                  ),
-                  const SizedBox(height: 12),
-                  Obx(() => CustomButton(
-                        label: 'Tag as Delivered',
-                        enabled: controller.isScanned.value,
-                        onPressed: controller.tagAsDelivered,
-                      )),
-                ],
-              ),
+              child: Obx(() {
+                final scanned = controller.isScanned.value;
+                final podPath = controller.proofOfDeliveryPath.value.trim();
+                final hasPod = podPath.isNotEmpty && File(podPath).existsSync();
+                final canTagDelivered = scanned && hasPod;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CustomButton(
+                      label: 'Scan Customer Receipt',
+                      icon: Icons.qr_code_scanner_rounded,
+                      variant: scanned
+                          ? CustomButtonVariant.secondary
+                          : CustomButtonVariant.primary,
+                      onPressed: controller.startScanning,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    CustomButton(
+                      label: 'Tag as Delivered',
+                      icon: Icons.check_circle_outline_rounded,
+                      variant: CustomButtonVariant.success,
+                      enabled: canTagDelivered,
+                      onPressed: controller.tagAsDelivered,
+                    ),
+                    if (scanned && !hasPod) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        'Capture Proof of Delivery photo above to tag as delivered.',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.caption.copyWith(
+                          fontSize: 13.5,
+                          color: AppColors.danger,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              }),
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildHeaderCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF6533E7), Color(0xFF887DF6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6533E7).withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.receipt_long_outlined,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-          const SizedBox(width: 16),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Receipt Verification',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Scan the customer\'s e-receipt to verify payment.',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: Color(0xFFE2E4E8),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class _LedgerRow extends StatelessWidget {
+  const _LedgerRow({
+    required this.label,
+    required this.value,
+    required this.placeholder,
+    this.isMonospace = false,
+    this.isPeso = false,
+  });
 
-  Widget _buildField({
-    required String label,
-    required String value,
-    required String placeholder,
-  }) {
+  final String label;
+  final String value;
+  final String placeholder;
+  final bool isMonospace;
+  final bool isPeso;
+
+  @override
+  Widget build(BuildContext context) {
     final hasValue = value.isNotEmpty;
-    return Column(
+
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF2F333A),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          decoration: BoxDecoration(
-            color: hasValue ? Colors.white : const Color(0xFFEAEAEF),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: hasValue ? const Color(0xFFE2E4E8) : Colors.transparent,
-              width: 1.5,
-            ),
-            boxShadow: hasValue
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
+        Expanded(
+          flex: 2,
           child: Text(
-            hasValue ? value : placeholder,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              color: hasValue ? const Color(0xFF2F333A) : const Color(0xFFB8BCC5),
+            label,
+            style: AppTypography.caption.copyWith(
+              fontSize: 17,
+              color: AppColors.inkMuted,
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildAmountField({
-    required String label,
-    required String value,
-    required String placeholder,
-  }) {
-    final hasValue = value.isNotEmpty;
-    // Extract the numeric part from the amount string (e.g. "₱ 1,574.00" -> "1,574.00")
-    String displayAmount = '';
-    if (hasValue) {
-      displayAmount = value.replaceAll('₱', '').trim();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF2F333A),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          decoration: BoxDecoration(
-            color: hasValue ? Colors.white : const Color(0xFFEAEAEF),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: hasValue ? const Color(0xFFE2E4E8) : Colors.transparent,
-              width: 1.5,
-            ),
-            boxShadow: hasValue
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          flex: 3,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: (hasValue && isPeso)
+                ? PesoFormatter.buildPesoText(
+                    amount: value,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.inkPrimary,
+                  )
+                : Text(
+                    hasValue ? value : placeholder,
+                    textAlign: TextAlign.right,
+                    style: (isMonospace
+                            ? AppTypography.monoRef
+                            : AppTypography.label)
+                        .copyWith(
+                      fontSize: 18,
+                      fontWeight: hasValue ? FontWeight.w600 : FontWeight.w400,
+                      color:
+                          hasValue ? AppColors.inkPrimary : AppColors.inkSubtle,
                     ),
-                  ]
-                : null,
-          ),
-          child: hasValue
-              ? PesoFormatter.buildPesoText(
-                  amount: displayAmount,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: const Color(0xFF2F333A),
-                )
-              : Text(
-                  placeholder,
-                  style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFFB8BCC5),
                   ),
-                ),
+          ),
         ),
       ],
     );
   }
+}
+
+class _TicketHalfCard extends StatelessWidget {
+  const _TicketHalfCard({
+    required this.isTop,
+    required this.borderColor,
+    required this.child,
+  });
+
+  final bool isTop;
+  final Color borderColor;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _TicketHalfPainter(
+        isTop: isTop,
+        borderColor: borderColor,
+      ),
+      child: ClipPath(
+        clipper: _TicketHalfClipper(isTop: isTop),
+        child: Container(
+          color: AppColors.surface,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+Path _buildTicketHalfPath(Size size, {required bool isTop}) {
+  const double r = AppRadii.xl;
+  const double n = 10.0;
+  final double w = size.width;
+  final double h = size.height;
+
+  final path = Path();
+  if (isTop) {
+    path.moveTo(0, r);
+    path.quadraticBezierTo(0, 0, r, 0);
+    path.lineTo(w - r, 0);
+    path.quadraticBezierTo(w, 0, w, r);
+    path.lineTo(w, h - n);
+    path.arcToPoint(
+      Offset(w - n, h),
+      radius: const Radius.circular(n),
+      clockwise: false,
+    );
+    path.lineTo(n, h);
+    path.arcToPoint(
+      Offset(0, h - n),
+      radius: const Radius.circular(n),
+      clockwise: false,
+    );
+    path.close();
+  } else {
+    path.moveTo(n, 0);
+    path.lineTo(w - n, 0);
+    path.arcToPoint(
+      Offset(w, n),
+      radius: const Radius.circular(n),
+      clockwise: false,
+    );
+    path.lineTo(w, h - r);
+    path.quadraticBezierTo(w, h, w - r, h);
+    path.lineTo(r, h);
+    path.quadraticBezierTo(0, h, 0, h - r);
+    path.lineTo(0, n);
+    path.arcToPoint(
+      const Offset(n, 0),
+      radius: const Radius.circular(n),
+      clockwise: false,
+    );
+    path.close();
+  }
+  return path;
+}
+
+class _TicketHalfClipper extends CustomClipper<Path> {
+  const _TicketHalfClipper({required this.isTop});
+  final bool isTop;
+
+  @override
+  Path getClip(Size size) => _buildTicketHalfPath(size, isTop: isTop);
+
+  @override
+  bool shouldReclip(covariant _TicketHalfClipper oldClipper) =>
+      oldClipper.isTop != isTop;
+}
+
+class _TicketHalfPainter extends CustomPainter {
+  const _TicketHalfPainter({
+    required this.isTop,
+    required this.borderColor,
+  });
+
+  final bool isTop;
+  final Color borderColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const double r = AppRadii.xl;
+    const double n = 10.0;
+    final double w = size.width;
+    final double h = size.height;
+
+    final borderPaint = Paint()
+      ..color = borderColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.25;
+
+    final outlinePath = Path();
+    if (isTop) {
+      outlinePath.moveTo(0, h - n);
+      outlinePath.lineTo(0, r);
+      outlinePath.quadraticBezierTo(0, 0, r, 0);
+      outlinePath.lineTo(w - r, 0);
+      outlinePath.quadraticBezierTo(w, 0, w, r);
+      outlinePath.lineTo(w, h - n);
+      outlinePath.arcToPoint(
+        Offset(w - n, h),
+        radius: const Radius.circular(n),
+        clockwise: false,
+      );
+      final leftArc = Path()
+        ..moveTo(n, h)
+        ..arcToPoint(
+          Offset(0, h - n),
+          radius: const Radius.circular(n),
+          clockwise: false,
+        );
+      canvas.drawPath(outlinePath, borderPaint);
+      canvas.drawPath(leftArc, borderPaint);
+
+      // Dashed tear rule along the shared seam between top and bottom halves
+      final dashPaint = Paint()
+        ..color = AppColors.borderStrong
+        ..strokeWidth = 1.2;
+      double x = n + 4;
+      while (x + 6 <= w - n - 4) {
+        canvas.drawLine(Offset(x, h), Offset(x + 6, h), dashPaint);
+        x += 11;
+      }
+    } else {
+      outlinePath.moveTo(w - n, 0);
+      outlinePath.arcToPoint(
+        Offset(w, n),
+        radius: const Radius.circular(n),
+        clockwise: false,
+      );
+      outlinePath.lineTo(w, h - r);
+      outlinePath.quadraticBezierTo(w, h, w - r, h);
+      outlinePath.lineTo(r, h);
+      outlinePath.quadraticBezierTo(0, h, 0, h - r);
+      outlinePath.lineTo(0, n);
+      outlinePath.arcToPoint(
+        const Offset(n, 0),
+        radius: const Radius.circular(n),
+        clockwise: false,
+      );
+      canvas.drawPath(outlinePath, borderPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TicketHalfPainter oldDelegate) =>
+      oldDelegate.isTop != isTop || oldDelegate.borderColor != borderColor;
 }

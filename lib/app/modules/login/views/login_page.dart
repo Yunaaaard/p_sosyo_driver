@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/core/constants/app_constants.dart';
+import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'package:p_sosyo_driver/app/modules/login/controller/login_controller.dart';
+import 'package:p_sosyo_driver/app/widgets/custom_button.dart';
+import 'package:p_sosyo_driver/app/widgets/custom_textfield.dart';
 
 class LoginPage extends GetView<LoginController> {
   const LoginPage({super.key});
@@ -9,6 +14,7 @@ class LoginPage extends GetView<LoginController> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final keyboardOpen = bottomInset > 0;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
     // Sync controller keyboard state with actual keyboard inset
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -24,120 +30,170 @@ class LoginPage extends GetView<LoginController> {
           resizeToAvoidBottomInset: false,
           body: Stack(
             children: [
-              // 1. Ambient Background Layer with Brand Overlay
-              Positioned.fill(
-                child: Image.asset(
-                  'assets/images/psosyo_background.png',
-                  fit: BoxFit.cover,
-                ),
-              ),
-
-              // 2. Subtle Darker Top Gradient to make artwork and status bar pop
+              // 1. Deep studio backdrop with subtle brand radial glow
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
+                    color: AppColors.surfaceDark,
+                    gradient: RadialGradient(
+                      center: const Alignment(0.75, -0.88),
+                      radius: 1.1,
                       colors: [
-                        Colors.black.withOpacity(0.35),
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.15),
+                        AppColors.primary.withOpacity(0.24),
+                        AppColors.secondary.withOpacity(0.12),
+                        AppColors.surfaceDark,
                       ],
-                      stops: const [0.0, 0.4, 1.0],
+                      stops: const [0.0, 0.45, 1.0],
+                    ),
+                  ),
+                  child: Opacity(
+                    opacity: 0.06,
+                    child: Image.asset(
+                      AppConstants.backgroundAsset,
+                      fit: BoxFit.cover,
                     ),
                   ),
                 ),
               ),
 
-              // 3. Top Branding & Floating Header (Visible when keyboard is closed)
+              // 2. Top Brand Header (Visible when keyboard is closed)
               SafeArea(
+                bottom: false,
                 child: Obx(() {
                   final isKeyboardVisible = controller.keyboardVisible.value;
                   return AnimatedOpacity(
-                    duration: const Duration(milliseconds: 200),
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180),
                     opacity: isKeyboardVisible ? 0.0 : 1.0,
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 24.0),
-                      child: Align(
-                        alignment: Alignment.topCenter,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.18),
-                                borderRadius: BorderRadius.circular(30),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.35),
-                                  width: 1,
-                                ),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.local_shipping_outlined,
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.xxl,
+                        AppSpacing.xl,
+                        AppSpacing.xxl,
+                        0,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 34,
+                                  height: 34,
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
                                     color: Colors.white,
-                                    size: 16,
+                                    borderRadius:
+                                        BorderRadius.circular(AppRadii.sm),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color:
+                                            AppColors.primary.withOpacity(0.28),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
                                   ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'P-Sosyo Driver Edition',
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.white,
-                                      letterSpacing: 0.5,
+                                  child: SvgPicture.asset(
+                                    AppConstants.paqnerLogoAsset,
+                                    width: 22,
+                                    height: 17,
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Flexible(
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      AppConstants.appName,
+                                      style: AppTypography.heading.copyWith(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        letterSpacing: 1.4,
+                                        fontWeight: FontWeight.w800,
+                                      ),
                                     ),
                                   ),
-                                ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceDarkElevated,
+                              borderRadius: BorderRadius.circular(AppRadii.sm),
+                              border: Border.all(
+                                color: AppColors.surfaceDarkBorder,
                               ),
                             ),
-                          ],
-                        ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.mint,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'DRIVER EDITION',
+                                  style: AppTypography.micro.copyWith(
+                                    fontSize: 13.5,
+                                    color: AppColors.mint,
+                                    letterSpacing: 0.9,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
                 }),
               ),
 
-              // 4. Bottom Modern Sheet Container
+              // 3. Anchored Rounded Form Container
               Align(
                 alignment: Alignment.bottomCenter,
                 child: Obx(() {
                   final isKeyboardVisible = controller.keyboardVisible.value;
 
                   return AnimatedContainer(
-                    duration: const Duration(milliseconds: 260),
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 240),
                     curve: Curves.easeOutCubic,
                     alignment: Alignment.bottomCenter,
                     child: FractionallySizedBox(
                       alignment: Alignment.bottomCenter,
-                      heightFactor: isKeyboardVisible ? 0.88 : 0.78,
+                      heightFactor: isKeyboardVisible ? 0.90 : 0.80,
                       child: Container(
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppColors.surface,
                           borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(36),
-                            topRight: Radius.circular(36),
+                            topLeft: Radius.circular(AppRadii.sheet),
+                            topRight: Radius.circular(AppRadii.sheet),
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFF6533E7).withOpacity(0.12),
-                              blurRadius: 36,
-                              offset: const Offset(0, -10),
-                            ),
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.06),
-                              blurRadius: 12,
-                              offset: const Offset(0, -2),
+                              color: Colors.black.withOpacity(0.18),
+                              blurRadius: 28,
+                              offset: const Offset(0, -8),
                             ),
                           ],
                         ),
@@ -146,50 +202,81 @@ class LoginPage extends GetView<LoginController> {
                           child: SingleChildScrollView(
                             physics: const ClampingScrollPhysics(),
                             padding: EdgeInsets.fromLTRB(
-                              24,
-                              isKeyboardVisible ? 14 : 16,
-                              24,
-                              isKeyboardVisible ? 16 : 28,
+                              AppSpacing.xxl,
+                              isKeyboardVisible ? 16 : 14,
+                              AppSpacing.xxl,
+                              bottomInset > 0
+                                  ? bottomInset + AppSpacing.lg
+                                  : AppSpacing.xxl,
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                // Top Drag Handle
                                 Center(
                                   child: Container(
-                                    width: 44,
+                                    width: 38,
                                     height: 4,
+                                    margin: const EdgeInsets.only(
+                                      bottom: AppSpacing.lg,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFE2E4E8),
-                                      borderRadius: BorderRadius.circular(2),
+                                      color: AppColors.borderStrong
+                                          .withOpacity(0.55),
+                                      borderRadius:
+                                          BorderRadius.circular(AppRadii.pill),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 16),
-
-                                // Brand Logo & Title Header
-                                _buildHeader(isKeyboardVisible),
-                                const SizedBox(height: 24),
-
-                                // Username / MD Code Field
-                                _buildUsernameField(),
-                                const SizedBox(height: 18),
-
-                                // Password Field
-                                _buildPasswordField(),
-                                const SizedBox(height: 14),
-
-                                // Remember Me Row
+                                _buildHeader(isKeyboardVisible, reduceMotion),
+                                const SizedBox(height: AppSpacing.xxl),
+                                CustomTextField(
+                                  controller: controller.usernameController,
+                                  focusNode: controller.usernameFocus,
+                                  label: 'Driver MD Code',
+                                  hintText: 'e.g. SMB0012 or MN0007',
+                                  prefixIcon: Icons.badge_outlined,
+                                  textInputAction: TextInputAction.next,
+                                  onSubmitted: (_) =>
+                                      controller.focusPassword(),
+                                ),
+                                const SizedBox(height: AppSpacing.lg),
+                                Obx(
+                                  () => CustomTextField(
+                                    controller: controller.passwordController,
+                                    focusNode: controller.passwordFocus,
+                                    label: 'Password',
+                                    hintText: 'Enter your password',
+                                    prefixIcon: Icons.lock_outline_rounded,
+                                    obscureText:
+                                        controller.obscurePassword.value,
+                                    textInputAction: TextInputAction.done,
+                                    onSubmitted: (_) =>
+                                        controller.submitLogin(),
+                                    suffixIcon: IconButton(
+                                      onPressed:
+                                          controller.togglePasswordVisibility,
+                                      icon: Icon(
+                                        controller.obscurePassword.value
+                                            ? Icons.visibility_off_outlined
+                                            : Icons.visibility_outlined,
+                                        color: AppColors.inkMuted,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: AppSpacing.md),
                                 _buildRememberRow(),
-                                const SizedBox(height: 24),
-
-                                // Primary Login Button
-                                _buildSubmitButton(),
-                                const SizedBox(height: 16),
-
-                                // Security Footer
-                                _buildSecurityBadge(),
+                                const SizedBox(height: AppSpacing.xxl),
+                                Obx(
+                                  () => CustomButton(
+                                    label: 'Sign In',
+                                    icon: Icons.arrow_forward_rounded,
+                                    isLoading: controller.isLoading.value,
+                                    onPressed: controller.submitLogin,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -206,337 +293,154 @@ class LoginPage extends GetView<LoginController> {
     );
   }
 
-  /// Builds the animated header with logo, title and friendly subtitle.
-  Widget _buildHeader(bool isKeyboardVisible) {
+  Widget _buildHeader(bool isKeyboardVisible, bool reduceMotion) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         AnimatedSize(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          child: SizedBox(
-            height: isKeyboardVisible ? 0 : 105,
-            child: isKeyboardVisible
-                ? const SizedBox.shrink()
-                : Center(
-                    child: Hero(
-                      tag: 'app_login_logo',
-                      child: Image.asset(
-                        'assets/images/psosyo_login_logo.png',
-                        height: 95,
-                        fit: BoxFit.contain,
+          duration:
+              reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          child: isKeyboardVisible
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 56,
+                        height: 56,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryTint,
+                          borderRadius: BorderRadius.circular(AppRadii.lg),
+                          border: Border.all(color: AppColors.primaryBorder),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withOpacity(0.10),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Hero(
+                          tag: 'app_login_logo',
+                          child: SvgPicture.asset(
+                            AppConstants.paqnerLogoAsset,
+                            width: 34,
+                            height: 26,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'FIELD DISPATCH',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.eyebrow.copyWith(
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Route & E-Receipt Verification',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.caption.copyWith(
+                                fontSize: 16.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-          ),
+                ),
         ),
-        if (!isKeyboardVisible) const SizedBox(height: 12),
         const Text(
-          'Welcome Back',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 26,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF2F333A),
-            letterSpacing: -0.3,
-          ),
+          'Driver Sign In',
+          style: AppTypography.display,
         ),
         const SizedBox(height: 6),
-        const Text(
-          'Sign in with your driver MD Code to access deliveries',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 13,
-            height: 1.4,
-            color: Color(0xFF8A8F99),
+        Text(
+          'Sign in with your driver MD Code to load today\'s deliveries.',
+          style: AppTypography.body.copyWith(
+            fontSize: 18.5,
+            color: AppColors.inkMuted,
           ),
         ),
       ],
     );
   }
 
-  /// Username / MD Code text field.
-  Widget _buildUsernameField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Salesman / Driver MD Code',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF2F333A),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8F9FD),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: const Color(0xFFE5E7EB),
-              width: 1.2,
-            ),
-          ),
-          child: TextField(
-            controller: controller.usernameController,
-            focusNode: controller.usernameFocus,
-            textInputAction: TextInputAction.next,
-            onSubmitted: (_) => controller.focusPassword(),
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF2F333A),
-            ),
-            decoration: InputDecoration(
-              hintText: 'e.g. SMB0012 or MN0007',
-              hintStyle: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 14,
-                color: Color(0xFFB8BCC5),
-              ),
-              prefixIcon: Container(
-                margin: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF2EFFF),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.badge_outlined,
-                  color: Color(0xFF6533E7),
-                  size: 20,
-                ),
-              ),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 16,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Password field with visibility toggle and lock prefix.
-  Widget _buildPasswordField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Password',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF2F333A),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Obx(
-          () => Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8F9FD),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: const Color(0xFFE5E7EB),
-                width: 1.2,
-              ),
-            ),
-            child: TextField(
-              controller: controller.passwordController,
-              focusNode: controller.passwordFocus,
-              obscureText: controller.obscurePassword.value,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => controller.submitLogin(),
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF2F333A),
-              ),
-              decoration: InputDecoration(
-                hintText: 'Enter your password (e.g. 123)',
-                hintStyle: const TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 14,
-                  color: Color(0xFFB8BCC5),
-                ),
-                prefixIcon: Container(
-                  margin: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF2EFFF),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.lock_outline_rounded,
-                    color: Color(0xFF6533E7),
-                    size: 20,
-                  ),
-                ),
-                suffixIcon: IconButton(
-                  onPressed: controller.togglePasswordVisibility,
-                  icon: Icon(
-                    controller.obscurePassword.value
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    color: const Color(0xFF8A8F99),
-                    size: 20,
-                  ),
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Remember-me checkbox and forgot password link.
   Widget _buildRememberRow() {
     return Row(
       children: [
-        Obx(
-          () => SizedBox(
-            width: 24,
-            height: 24,
-            child: Checkbox(
-              value: controller.rememberMe.value,
-              onChanged: controller.toggleRememberMe,
-              activeColor: const Color(0xFF6533E7),
-              side: const BorderSide(
-                color: Color(0xFFC2C5CF),
-                width: 1.4,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
+        Expanded(
+          child: Obx(
+            () => InkWell(
+              onTap: () =>
+                  controller.toggleRememberMe(!controller.rememberMe.value),
+              borderRadius: BorderRadius.circular(AppRadii.sm),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: Checkbox(
+                        value: controller.rememberMe.value,
+                        onChanged: controller.toggleRememberMe,
+                        activeColor: AppColors.primary,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        side: const BorderSide(
+                          color: AppColors.borderStrong,
+                          width: 1.5,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Flexible(
+                      child: Text(
+                        'Remember MD Code',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption.copyWith(
+                          fontSize: 17.5,
+                          color: AppColors.inkSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-        const SizedBox(width: 8),
-        const Text(
-          'Remember me',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 13,
-            color: Color(0xFF8A8F99),
-          ),
-        ),
-        const Spacer(),
+        const SizedBox(width: AppSpacing.sm),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-            color: const Color(0xFFF2EFFF),
+            color: AppColors.canvas,
             borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: AppColors.border),
           ),
-          child: const Text(
+          child: Text(
             'Default: 123',
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF6533E7),
+            style: AppTypography.monoRef.copyWith(
+              fontSize: 15,
+              color: AppColors.inkMuted,
             ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Glowing gradient submit button with loading state.
-  Widget _buildSubmitButton() {
-    return Obx(() {
-      final isLoading = controller.isLoading.value;
-
-      return Container(
-        height: 56,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: const LinearGradient(
-            colors: [Color(0xFF6533E7), Color(0xFF7E4BFA)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF6533E7).withOpacity(0.35),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: isLoading ? null : controller.submitLogin,
-            borderRadius: BorderRadius.circular(16),
-            child: Center(
-              child: isLoading
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2.5,
-                      ),
-                    )
-                  : const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Let\'s Start',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Icon(
-                          Icons.arrow_forward_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ],
-                    ),
-            ),
-          ),
-        ),
-      );
-    });
-  }
-
-  /// Subtle security footnote badge.
-  Widget _buildSecurityBadge() {
-    return const Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          Icons.shield_outlined,
-          size: 14,
-          color: Color(0xFFB8BCC5),
-        ),
-        SizedBox(width: 6),
-        Text(
-          'Protected by Fast Logistics Driver System',
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 12,
-            color: Color(0xFFB8BCC5),
           ),
         ),
       ],

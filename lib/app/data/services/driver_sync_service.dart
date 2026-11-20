@@ -1,10 +1,12 @@
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
+import 'package:p_sosyo_driver/app/core/utils/location_helper.dart';
 import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
 import 'package:p_sosyo_driver/app/data/models/order_item.dart';
 import 'package:p_sosyo_driver/app/data/providers/api_client.dart';
 import 'package:p_sosyo_driver/app/data/providers/api_driver_ds.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
+import 'package:p_sosyo_driver/app/data/services/sms_service.dart';
 
 class SyncResult {
   final bool success;
@@ -30,7 +32,7 @@ class DriverSyncService extends GetxService {
   /// Sync advance orders and their items from backend API.
   Future<SyncResult> syncAdvanceOrders({SyncProgressCallback? onProgress}) async {
     try {
-      debugPrint('[DriverSyncService] Starting sync...');
+      logSync('Initiating advance order sync for dispatch...');
       onProgress?.call(0.12, 'Connecting to dispatch server...');
 
       // 1. Resolve Driver Credentials & Settings
@@ -39,7 +41,7 @@ class DriverSyncService extends GetxService {
       final distCode = await ApiClient.getDistCode();
       final todayStr = DateTime.now().toIso8601String().substring(0, 10);
 
-      debugPrint('[DriverSyncService] Driver: $driverCode, Dist: $distCode, Date: $todayStr');
+      logImportant('Syncing Route for Driver: $driverCode | Dist: $distCode | Date: $todayStr');
 
       // 2. Fetch Customers for this driver (to enrich names, addresses, coordinates)
       onProgress?.call(0.28, 'Locating store destinations...');
@@ -50,14 +52,20 @@ class DriverSyncService extends GetxService {
           mdCode: driverCode,
         );
         for (final cust in customers) {
-          final code = cust['custCode']?.toString();
-          if (code != null && code.isNotEmpty) {
+          final code = (cust['custCode'] ??
+                  cust['CUSTCODE'] ??
+                  cust['customerCode'] ??
+                  '')
+              .toString()
+              .trim();
+          if (code.isNotEmpty) {
             customerMap[code] = cust;
+            customerMap[code.toUpperCase()] = cust;
           }
         }
-        debugPrint('[DriverSyncService] Fetched ${customerMap.length} customers');
+        logSync('Fetched ${customerMap.length} dynamic route customers');
       } catch (e) {
-        debugPrint('[DriverSyncService] Note: Failed to fetch customers: $e');
+        logWarning('Note: Failed to fetch customers: $e');
       }
 
       // 3. Fetch Advance Order Headers
@@ -68,9 +76,9 @@ class DriverSyncService extends GetxService {
           distCode: distCode,
           mdCode: driverCode,
         );
-        debugPrint('[DriverSyncService] Fetched ${orderHeaders.length} advance order headers');
+        logSync('Fetched ${orderHeaders.length} advance order headers from server');
       } catch (e) {
-        debugPrint('[DriverSyncService] Failed to fetch advance orders: $e');
+        logError('Failed to fetch advance orders from server', e);
         return SyncResult(
           success: false,
           message: 'Could not connect to server: $e',
@@ -85,9 +93,9 @@ class DriverSyncService extends GetxService {
           distCode: distCode,
           plateNo: driverCode,
         );
-        debugPrint('[DriverSyncService] Fetched ${orderItemsRaw.length} item lines');
+        logSync('Fetched ${orderItemsRaw.length} item line details');
       } catch (e) {
-        debugPrint('[DriverSyncService] Note: Failed to fetch advance order items batch: $e');
+        logWarning('Note: Failed to fetch advance order items batch: $e');
       }
 
       // Group items by transactionID
@@ -101,7 +109,7 @@ class DriverSyncService extends GetxService {
 
       // 5. If no headers came back from API, return status
       if (orderHeaders.isEmpty) {
-        debugPrint('[DriverSyncService] No advance orders returned from server for driver $driverCode.');
+        logImportant('No advance orders returned from server for driver $driverCode.');
         return SyncResult(
           success: true,
           message: 'Sync completed. No new orders found for driver $driverCode.',
@@ -119,16 +127,18 @@ class DriverSyncService extends GetxService {
         }
       }
       final dedupedHeaders = uniqueHeaders.values.toList();
+      logImportant('Deduplicated headers: ${dedupedHeaders.length} unique orders from ${orderHeaders.length} raw headers');
 
-      // Check existing orders in DB to preserve status (e.g. if already Delivered locally)
+      // Check existing orders in DB to preserve status, deliveredAt, and paymentReference
       final existingOrders = await _dbService.getAllDeliveryOrders();
-      final Map<String, String> existingStatuses = {
-        for (var o in existingOrders) o.id: o.status.value,
-        for (var o in existingOrders) o.transactionId: o.status.value,
+      final Map<String, DeliveryOrder> existingOrderMap = {
+        for (var o in existingOrders) o.id: o,
+        for (var o in existingOrders) o.transactionId: o,
       };
 
       final List<DeliveryOrder> ordersToSave = [];
       final List<OrderItem> itemsToSave = [];
+      final driverCoords = await LocationHelper.getCurrentDriverLocation();
 
       for (int i = 0; i < dedupedHeaders.length; i++) {
         final header = dedupedHeaders[i];
@@ -140,7 +150,8 @@ class DriverSyncService extends GetxService {
                 header['cID']?.toString() ??
                 '')
             .trim();
-        final cust = customerMap[custCode];
+        final cust =
+            customerMap[custCode] ?? customerMap[custCode.toUpperCase()];
 
         // Resolve store photo URL for this customer
         String storePhotoUrl = '';
@@ -159,12 +170,47 @@ class DriverSyncService extends GetxService {
                 header['address']?.toString() ??
                 'Store Address')
             .trim();
-        final lat = cust?['latitude'] != null
-            ? double.tryParse(cust!['latitude'].toString())
-            : double.tryParse(header['latitude']?.toString() ?? '');
-        final lng = cust?['longitude'] != null
-            ? double.tryParse(cust!['longitude'].toString())
-            : double.tryParse(header['longitude']?.toString() ?? '');
+        double? rawLat = _parseCoord(
+          cust?['latitude'] ??
+              cust?['latitudeNew'] ??
+              cust?['LATITUDE'] ??
+              header['latitude'] ??
+              header['LATITUDE'] ??
+              header['lat'],
+        );
+        double? rawLng = _parseCoord(
+          cust?['longitude'] ??
+              cust?['longitudeNew'] ??
+              cust?['LONGITUDE'] ??
+              header['longitude'] ??
+              header['LONGITUDE'] ??
+              header['lng'] ??
+              header['lon'],
+        );
+        if (!LocationHelper.isValidCoordinate(rawLat, rawLng)) {
+          final geo = (cust?['geolocation'] ?? header['geolocation'] ?? '')
+              .toString()
+              .trim();
+          if (geo.contains(',')) {
+            final parts = geo.split(',');
+            rawLat = double.tryParse(parts[0].trim());
+            rawLng = double.tryParse(parts[1].trim());
+          }
+        }
+        final resolvedCoords = LocationHelper.resolveOrderCoordinates(
+          seedKey: custCode.isNotEmpty ? custCode : refno,
+          rawLat: rawLat,
+          rawLng: rawLng,
+        );
+        final lat = resolvedCoords.latitude;
+        final lng = resolvedCoords.longitude;
+        final distanceKm = LocationHelper.calculateDistanceKm(
+          startLat: driverCoords.latitude,
+          startLng: driverCoords.longitude,
+          endLat: lat,
+          endLng: lng,
+        );
+        final distanceLabel = LocationHelper.formatDistanceKmAway(distanceKm);
 
         // Items for this order: either from separate items endpoint or embedded in header
         List<Map<dynamic, dynamic>> txnItems = itemsByTxnId[txnId] ?? [];
@@ -197,6 +243,11 @@ class DriverSyncService extends GetxService {
                   rawItem['unit']?.toString() ??
                   'PC')
               .trim();
+          final category = (rawItem['mainCategory']?.toString() ??
+                  rawItem['CATEGORY']?.toString() ??
+                  rawItem['category']?.toString() ??
+                  'BEVERAGE')
+              .trim();
           final itemTotal = double.tryParse(rawItem['totalAmount']?.toString() ?? '') ??
               (price * (double.tryParse(qty.toString()) ?? 1.0));
           computedTotalAmount += itemTotal;
@@ -206,6 +257,7 @@ class DriverSyncService extends GetxService {
               deliveryOrderId: refno,
               stockCode: stockCode,
               title: title,
+              category: category,
               price: price,
               orderedQty: '$qty',
               totalAmount: itemTotal,
@@ -217,9 +269,31 @@ class DriverSyncService extends GetxService {
         final headerAmount = double.tryParse(header['totalAmount']?.toString() ?? '');
         final finalTotalAmount = headerAmount ?? computedTotalAmount;
 
-        // Preserve 'Delivered' if already marked locally
-        final existingStatus = existingStatuses[refno] ?? existingStatuses[txnId];
-        final status = existingStatus ?? 'Out for Delivery';
+        // Preserve local status, 1h delivery timestamp, and payment reference
+        final existingOrder = existingOrderMap[refno] ?? existingOrderMap[txnId];
+        final status = existingOrder?.status.value ?? 'Out for Delivery';
+
+        final rawPhone = (header['phone']?.toString() ??
+                header['contactNumber']?.toString() ??
+                header['contactCellNumber']?.toString() ??
+                header['mobileNumber']?.toString() ??
+                header['mobile']?.toString() ??
+                header['telNo']?.toString() ??
+                cust?['contactCellNumber']?.toString() ??
+                cust?['phone']?.toString() ??
+                cust?['mobile']?.toString() ??
+                cust?['contactNumber']?.toString() ??
+                cust?['telNo']?.toString() ??
+                '')
+            .trim();
+        final resolvedPhone = rawPhone.isNotEmpty
+            ? rawPhone
+            : (existingOrder?.customerPhone ?? '');
+        final resolvedRemarks = (header['remarks']?.toString() ??
+                header['REMARKS']?.toString() ??
+                existingOrder?.orderRemarks ??
+                '')
+            .trim();
 
         final parts = finalTotalAmount.toStringAsFixed(2).split('.');
         final regExp = RegExp(r'\B(?=(\d{3})+(?!\d))');
@@ -234,26 +308,59 @@ class DriverSyncService extends GetxService {
             storePhoto: storePhotoUrl,
             storeName: storeName,
             address: address,
-            distance: 'Ready',
+            distance: distanceLabel,
             sku: txnItems.isNotEmpty ? txnItems.length.toString() : (header['sku_count']?.toString() ?? '1'),
             totalAmount: formattedAmount,
             status: status,
             deliveryDate: header['unloadingDate']?.toString() ?? header['deliveryDate']?.toString() ?? todayStr,
             latitude: lat,
             longitude: lng,
+            distanceKm: distanceKm,
+            deliveredAt: existingOrder?.deliveredAt,
+            paymentReference: existingOrder?.paymentReference,
+            proofOfDeliveryPath: existingOrder?.proofOfDeliveryPath,
+            cancellationReason: existingOrder?.cancellationReason,
+            customerPhone: resolvedPhone,
+            orderRemarks: resolvedRemarks,
+            attemptCount: existingOrder?.attemptCount ?? 0,
+            lastAttemptReason: existingOrder?.lastAttemptReason,
+            lastAttemptAt: existingOrder?.lastAttemptAt,
+            outForDeliverySmsSentAt: existingOrder?.outForDeliverySmsSentAt,
+            isLocked: existingOrder?.isLocked ?? false,
+            scheduledDeliveryDate: existingOrder?.scheduledDeliveryDate,
+            lockedAt: existingOrder?.lockedAt,
           ),
         );
       }
 
+      // Sort in ascending order from nearest to farthest before saving to DB
+      ordersToSave.sort((a, b) =>
+          (a.distanceKm ?? double.infinity)
+              .compareTo(b.distanceKm ?? double.infinity));
+
       // 7. Save batch to SQLite
       onProgress?.call(0.92, 'Updating offline database & items...');
+      logSync('Saving ${ordersToSave.length} orders & ${itemsToSave.length} items to SQLite...');
       await _dbService.saveDeliveryOrdersBatch(ordersToSave);
       if (itemsToSave.isNotEmpty) {
         await _dbService.saveOrderItemsBatch(itemsToSave);
       }
 
+      // 8. Auto-notify customers via SMS for newly dispatched Out-for-Delivery orders
+      if (Get.isRegistered<SmsService>()) {
+        final smsService = SmsService.to;
+        for (final order in ordersToSave) {
+          if (order.status.value == 'Out for Delivery' &&
+              (order.outForDeliverySmsSentAt == null ||
+                  order.outForDeliverySmsSentAt!.isEmpty) &&
+              smsService.isValidPhoneNumber(order.customerPhone)) {
+            await smsService.sendOutForDeliveryNotification(order);
+          }
+        }
+      }
+
       onProgress?.call(1.0, 'Dispatch ready! Orders updated.');
-      debugPrint('[DriverSyncService] Successfully synced ${ordersToSave.length} orders & ${itemsToSave.length} items.');
+      logImportant('Successfully synced ${ordersToSave.length} delivery orders & ${itemsToSave.length} items for dispatch!');
       return SyncResult(
         success: true,
         message: 'Sync completed successfully.',
@@ -261,12 +368,19 @@ class DriverSyncService extends GetxService {
         itemCount: itemsToSave.length,
       );
     } catch (e, stack) {
-      debugPrint('[DriverSyncService] Unexpected error: $e\n$stack');
+      logError('DriverSyncService unexpected sync failure', e, stack);
       return SyncResult(
         success: false,
         message: 'Sync failed: $e',
       );
     }
+  }
+
+  static double? _parseCoord(dynamic raw) {
+    if (raw == null) return null;
+    final val = double.tryParse(raw.toString().trim());
+    if (val == null || val == 0.0 || val == 9999.0) return null;
+    return val;
   }
 }
 

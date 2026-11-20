@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 
 /// Renders a store/customer photo from RavaMate's S3/legacy servers,
 /// with automatic candidate fallbacks and a final fallback to the default store design.
@@ -20,7 +21,7 @@ class StoreImageWidget extends StatefulWidget {
     this.distCode,
     this.width = 58,
     this.height = 58,
-    this.borderRadius = const BorderRadius.all(Radius.circular(16)),
+    this.borderRadius = const BorderRadius.all(Radius.circular(14)),
     required this.fallback,
     this.enablePreview = false,
   });
@@ -82,34 +83,62 @@ class _StoreImageWidgetState extends State<StoreImageWidget> {
 
     final currentUrl = _candidates[_currentCandidateIndex];
 
-    Widget imageWidget = ClipRRect(
-      borderRadius: widget.borderRadius,
-      child: Image.network(
-        currentUrl,
-        width: widget.width,
-        height: widget.height,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _currentCandidateIndex < _candidates.length) {
-              setState(() {
-                _currentCandidateIndex++;
-              });
-            }
-          });
-          return widget.fallback;
-        },
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return widget.fallback;
-        },
+    Widget imageWidget = Container(
+      width: widget.width,
+      height: widget.height,
+      decoration: BoxDecoration(
+        borderRadius: widget.borderRadius,
+        border: Border.all(color: AppColors.border, width: 1),
+      ),
+      child: ClipRRect(
+        borderRadius: widget.borderRadius,
+        child: Image.network(
+          currentUrl,
+          width: widget.width,
+          height: widget.height,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _currentCandidateIndex < _candidates.length) {
+                setState(() {
+                  _currentCandidateIndex++;
+                });
+              }
+            });
+            return widget.fallback;
+          },
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return widget.fallback;
+          },
+        ),
       ),
     );
 
     if (widget.enablePreview) {
       return GestureDetector(
         onTap: () => _showImagePreview(context, currentUrl),
-        child: imageWidget,
+        child: Stack(
+          children: [
+            imageWidget,
+            Positioned(
+              right: 4,
+              bottom: 4,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceDark.withOpacity(0.72),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.open_in_full_rounded,
+                  size: 11,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
       );
     }
 
@@ -121,24 +150,21 @@ class _StoreImageWidgetState extends State<StoreImageWidget> {
       Dialog(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+        insetPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xl,
+          vertical: AppSpacing.xxxl,
+        ),
         child: Stack(
           alignment: Alignment.topRight,
           children: [
             Container(
               decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.5),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+                color: AppColors.surfaceDark,
+                borderRadius: BorderRadius.circular(AppRadii.xl),
+                border: Border.all(color: AppColors.surfaceDarkBorder),
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadii.xl),
                 child: Image.network(
                   url,
                   fit: BoxFit.contain,
@@ -147,14 +173,18 @@ class _StoreImageWidgetState extends State<StoreImageWidget> {
               ),
             ),
             Positioned(
-              top: 12,
-              right: 12,
-              child: IconButton(
-                onPressed: () => Get.back(),
-                icon: const Icon(Icons.close_rounded, color: Colors.white, size: 26),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black54,
-                  padding: const EdgeInsets.all(6),
+              top: AppSpacing.md,
+              right: AppSpacing.md,
+              child: Material(
+                color: AppColors.surfaceDark.withOpacity(0.8),
+                shape: const CircleBorder(),
+                child: IconButton(
+                  onPressed: () => Get.back(),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
                 ),
               ),
             ),
@@ -165,4 +195,3 @@ class _StoreImageWidgetState extends State<StoreImageWidget> {
     );
   }
 }
-

@@ -21,6 +21,10 @@ dependencies:
   dio: ^5.7.0
   shared_preferences: ^2.3.2
   qr_flutter: ^4.1.0
+  image_picker: ^1.1.2
+  path_provider: ^2.1.4
+  print_bluetooth_thermal: ^1.2.1
+  esc_pos_utils_plus: ^2.0.4
 
 dev_dependencies:
   flutter_test:

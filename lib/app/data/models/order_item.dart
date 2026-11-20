@@ -3,6 +3,7 @@ class OrderItem {
   final String deliveryOrderId;
   final String stockCode;
   final String title;
+  final String category;
   final double price;
   final String orderedQty;
   final double totalAmount;
@@ -14,12 +15,16 @@ class OrderItem {
     required this.deliveryOrderId,
     String? stockCode,
     required this.title,
+    String? category,
     required this.price,
     required this.orderedQty,
     double? totalAmount,
     String? uom,
     String? createdAt,
   })  : stockCode = stockCode ?? '',
+        category = (category != null && category.trim().isNotEmpty)
+            ? category.trim()
+            : 'BEVERAGE',
         uom = uom ?? 'PC',
         totalAmount = totalAmount ?? (price * _parseQty(orderedQty)),
         createdAt = createdAt ?? DateTime.now().toIso8601String();
@@ -65,6 +70,7 @@ class OrderItem {
       deliveryOrderId: map['delivery_order_id']?.toString() ?? '',
       stockCode: map['stock_code']?.toString() ?? '',
       title: map['title']?.toString() ?? '',
+      category: map['category']?.toString() ?? 'BEVERAGE',
       price: (map['price'] as num?)?.toDouble() ?? 0.0,
       orderedQty: map['ordered_qty']?.toString() ?? '0',
       totalAmount: (map['total_amount'] as num?)?.toDouble() ?? 0.0,
@@ -80,6 +86,7 @@ class OrderItem {
       'delivery_order_id': deliveryOrderId,
       'stock_code': stockCode,
       'title': title,
+      'category': category,
       'price': price,
       'ordered_qty': orderedQty,
       'total_amount': totalAmount,

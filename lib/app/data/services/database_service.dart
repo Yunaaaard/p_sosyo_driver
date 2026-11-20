@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
+import 'package:p_sosyo_driver/app/data/models/delivery_attempt.dart';
 import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
 import 'package:p_sosyo_driver/app/data/models/driver.dart';
 import 'package:p_sosyo_driver/app/data/models/order_item.dart';
@@ -30,13 +32,39 @@ class DatabaseService extends GetxService {
     await _db.delete('delivery_orders', where: "id = '1' OR transaction_id = 'TXN-001' OR store_name LIKE '%ALING NENA%' OR id LIKE 'UV10%'");
     await _db.delete('order_items', where: "delivery_order_id = '1' OR delivery_order_id = 'TXN-001' OR delivery_order_id LIKE 'UV10%'");
 
-    // Ensure cust_code and store_photo columns exist in delivery_orders
-    try {
-      await _db.execute('ALTER TABLE delivery_orders ADD COLUMN cust_code TEXT');
-    } catch (_) {}
-    try {
-      await _db.execute('ALTER TABLE delivery_orders ADD COLUMN store_photo TEXT');
-    } catch (_) {}
+    // Ensure required columns exist without triggering native SQLiteLog errors
+    await _ensureColumnExists('delivery_orders', 'cust_code', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'store_photo', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'delivered_at', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'payment_reference', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'proof_of_delivery_path', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'cancellation_reason', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'customer_phone', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'order_remarks', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'attempt_count', 'INTEGER DEFAULT 0');
+    await _ensureColumnExists('delivery_orders', 'last_attempt_reason', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'last_attempt_at', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'out_for_delivery_sms_sent_at', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'is_locked', 'INTEGER DEFAULT 0');
+    await _ensureColumnExists('delivery_orders', 'scheduled_delivery_date', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'locked_at', 'TEXT');
+    await _ensureColumnExists('order_items', 'category', 'TEXT');
+    await _ensureColumnExists('receipts', 'customer_name', 'TEXT');
+    await _ensureColumnExists('receipts', 'proof_of_delivery_path', 'TEXT');
+
+    await _db.execute('''
+      CREATE TABLE IF NOT EXISTS delivery_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        delivery_order_id TEXT NOT NULL,
+        attempt_number INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        remarks TEXT,
+        sms_sent INTEGER NOT NULL DEFAULT 0,
+        attempted_at TEXT NOT NULL,
+        rescheduled_date TEXT
+      )
+    ''');
+    await _ensureColumnExists('delivery_attempts', 'rescheduled_date', 'TEXT');
 
     // Backfill photos for known sandbox orders if missing
     try {
@@ -69,6 +97,22 @@ class DatabaseService extends GetxService {
     return this;
   }
 
+  Future<void> _ensureColumnExists(
+    String table,
+    String column,
+    String definition,
+  ) async {
+    try {
+      final info = await _db.rawQuery('PRAGMA table_info($table)');
+      final exists = info.any((row) => row['name'] == column);
+      if (!exists) {
+        await _db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+      }
+    } catch (e, stack) {
+      logError('Error ensuring column $table.$column exists', e, stack);
+    }
+  }
+
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE drivers (
@@ -97,7 +141,20 @@ class DatabaseService extends GetxService {
         status TEXT NOT NULL,
         delivery_date TEXT,
         latitude REAL,
-        longitude REAL
+        longitude REAL,
+        delivered_at TEXT,
+        payment_reference TEXT,
+        proof_of_delivery_path TEXT,
+        cancellation_reason TEXT,
+        customer_phone TEXT,
+        order_remarks TEXT,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_attempt_reason TEXT,
+        last_attempt_at TEXT,
+        out_for_delivery_sms_sent_at TEXT,
+        is_locked INTEGER NOT NULL DEFAULT 0,
+        scheduled_delivery_date TEXT,
+        locked_at TEXT
       )
     ''');
 
@@ -107,6 +164,7 @@ class DatabaseService extends GetxService {
         delivery_order_id TEXT NOT NULL,
         stock_code TEXT,
         title TEXT NOT NULL,
+        category TEXT,
         price REAL NOT NULL,
         ordered_qty TEXT NOT NULL,
         total_amount REAL NOT NULL,
@@ -124,7 +182,9 @@ class DatabaseService extends GetxService {
         sender TEXT NOT NULL,
         receiver TEXT NOT NULL,
         date TEXT NOT NULL,
-        scanned_at TEXT NOT NULL
+        scanned_at TEXT NOT NULL,
+        customer_name TEXT,
+        proof_of_delivery_path TEXT
       )
     ''');
 
@@ -139,7 +199,7 @@ class DatabaseService extends GetxService {
       pin: '',
     ).toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
 
-    debugPrint('DatabaseService: Seeded default driver.');
+    logImportant('DatabaseService: Seeded default driver SBRM007.');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -249,6 +309,7 @@ class DatabaseService extends GetxService {
       await _db.delete('delivery_orders');
       await _db.delete('order_items');
       await _db.delete('receipts');
+      await _db.delete('delivery_attempts');
       await _db.delete('drivers');
       await _db.execute('PRAGMA foreign_keys = ON');
 
@@ -260,7 +321,7 @@ class DatabaseService extends GetxService {
       await prefs.remove(ApiClient.keyDriverCode);
       await prefs.remove('remember_me');
 
-      debugPrint('DatabaseService: All tables cleared and reset on logout.');
+      logImportant('DatabaseService: All tables cleared and reset on logout.');
 
       Get.snackbar(
         'Logged Out',
@@ -272,8 +333,8 @@ class DatabaseService extends GetxService {
         borderRadius: 12,
         duration: const Duration(seconds: 2),
       );
-    } catch (e) {
-      debugPrint('Error clearing tables on logout: $e');
+    } catch (e, stack) {
+      logError('Error clearing tables on logout', e, stack);
     } finally {
       Get.offAllNamed(AppRoutes.login);
     }
@@ -377,10 +438,30 @@ class DatabaseService extends GetxService {
     await batch.commit(noResult: true);
   }
 
-  Future<void> updateDeliveryOrderStatus(String orderId, String newStatus) async {
+  Future<void> updateDeliveryOrderStatus(
+    String orderId,
+    String newStatus, {
+    String? deliveredAt,
+    String? paymentReference,
+    String? proofOfDeliveryPath,
+    String? cancellationReason,
+  }) async {
+    final Map<String, Object?> updates = {'status': newStatus};
+    if (deliveredAt != null) {
+      updates['delivered_at'] = deliveredAt;
+    }
+    if (paymentReference != null) {
+      updates['payment_reference'] = paymentReference;
+    }
+    if (proofOfDeliveryPath != null) {
+      updates['proof_of_delivery_path'] = proofOfDeliveryPath;
+    }
+    if (cancellationReason != null) {
+      updates['cancellation_reason'] = cancellationReason;
+    }
     await _db.update(
       'delivery_orders',
-      {'status': newStatus},
+      updates,
       where: 'id = ? OR transaction_id = ?',
       whereArgs: [orderId, orderId],
     );
@@ -451,6 +532,107 @@ class DatabaseService extends GetxService {
   Future<List<Receipt>> getAllReceipts() async {
     final results = await _db.query('receipts');
     return results.map((map) => Receipt.fromMap(map)).toList();
+  }
+
+  // --- Delivery Attempts & Customer SMS Queries ---
+
+  Future<int> insertDeliveryAttempt(DeliveryAttempt attempt) async {
+    return await _db.insert('delivery_attempts', attempt.toMap());
+  }
+
+  Future<List<DeliveryAttempt>> getDeliveryAttempts(
+      String deliveryOrderId) async {
+    final results = await _db.query(
+      'delivery_attempts',
+      where: 'delivery_order_id = ?',
+      whereArgs: [deliveryOrderId],
+      orderBy: 'attempt_number ASC, id ASC',
+    );
+    return results.map((map) => DeliveryAttempt.fromMap(map)).toList();
+  }
+
+  Future<void> updateOrderAttemptState({
+    required String orderId,
+    required int attemptCount,
+    required String lastAttemptReason,
+    required String lastAttemptAt,
+    bool? isLocked,
+    String? scheduledDeliveryDate,
+    String? lockedAt,
+  }) async {
+    final Map<String, Object?> updates = {
+      'attempt_count': attemptCount,
+      'last_attempt_reason': lastAttemptReason,
+      'last_attempt_at': lastAttemptAt,
+    };
+    if (isLocked != null) {
+      updates['is_locked'] = isLocked ? 1 : 0;
+    }
+    if (scheduledDeliveryDate != null) {
+      updates['scheduled_delivery_date'] = scheduledDeliveryDate;
+    }
+    if (lockedAt != null) {
+      updates['locked_at'] = lockedAt;
+    }
+    await _db.update(
+      'delivery_orders',
+      updates,
+      where: 'id = ? OR transaction_id = ?',
+      whereArgs: [orderId, orderId],
+    );
+  }
+
+  Future<void> updateOrderLockState({
+    required String orderId,
+    required bool isLocked,
+    String? scheduledDeliveryDate,
+    String? lockedAt,
+    String? lastAttemptReason,
+  }) async {
+    final Map<String, Object?> updates = {
+      'is_locked': isLocked ? 1 : 0,
+      'scheduled_delivery_date': isLocked ? scheduledDeliveryDate : null,
+      'locked_at': isLocked ? lockedAt : null,
+    };
+    if (lastAttemptReason != null) {
+      updates['last_attempt_reason'] = lastAttemptReason;
+    }
+    await _db.update(
+      'delivery_orders',
+      updates,
+      where: 'id = ? OR transaction_id = ?',
+      whereArgs: [orderId, orderId],
+    );
+  }
+
+  Future<void> updateOrderCustomerPhone(String orderId, String phone) async {
+    await _db.update(
+      'delivery_orders',
+      {'customer_phone': phone.trim()},
+      where: 'id = ? OR transaction_id = ?',
+      whereArgs: [orderId, orderId],
+    );
+  }
+
+  Future<void> markOutForDeliverySmsSent(String orderId, String sentAtIso) async {
+    await _db.update(
+      'delivery_orders',
+      {'out_for_delivery_sms_sent_at': sentAtIso},
+      where: 'id = ? OR transaction_id = ?',
+      whereArgs: [orderId, orderId],
+    );
+  }
+
+  Future<void> updateOrderPaymentReference(
+    String orderId,
+    String paymentReference,
+  ) async {
+    await _db.update(
+      'delivery_orders',
+      {'payment_reference': paymentReference.trim()},
+      where: 'id = ? OR transaction_id = ?',
+      whereArgs: [orderId, orderId],
+    );
   }
 
   @override

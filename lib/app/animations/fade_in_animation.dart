@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 /// A reusable fade-in animation wrapper.
-/// Animates a child widget from transparent to fully opaque.
+/// Respects system reduced-motion settings when enabled.
 class FadeInAnimation extends StatefulWidget {
   final Widget child;
   final Duration duration;
@@ -11,9 +12,9 @@ class FadeInAnimation extends StatefulWidget {
   const FadeInAnimation({
     super.key,
     required this.child,
-    this.duration = const Duration(milliseconds: 800),
+    this.duration = const Duration(milliseconds: 500),
     this.delay = Duration.zero,
-    this.curve = Curves.easeIn,
+    this.curve = Curves.easeOutCubic,
   });
 
   @override
@@ -24,6 +25,8 @@ class _FadeInAnimationState extends State<FadeInAnimation>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _opacity;
+  Timer? _delayTimer;
+  bool _started = false;
 
   @override
   void initState() {
@@ -37,14 +40,31 @@ class _FadeInAnimationState extends State<FadeInAnimation>
       parent: _controller,
       curve: widget.curve,
     );
+  }
 
-    Future.delayed(widget.delay, () {
-      if (mounted) _controller.forward();
-    });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 1.0;
+      return;
+    }
+
+    if (widget.delay == Duration.zero) {
+      _controller.forward();
+    } else {
+      _delayTimer = Timer(widget.delay, () {
+        if (mounted) _controller.forward();
+      });
+    }
   }
 
   @override
   void dispose() {
+    _delayTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }

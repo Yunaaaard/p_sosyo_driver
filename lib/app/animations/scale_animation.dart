@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 /// A reusable scale animation wrapper.
-/// Animates a child widget from a starting scale to full size.
+/// Respects system reduced-motion settings when enabled.
 class ScaleInAnimation extends StatefulWidget {
   final Widget child;
   final Duration duration;
@@ -12,10 +13,10 @@ class ScaleInAnimation extends StatefulWidget {
   const ScaleInAnimation({
     super.key,
     required this.child,
-    this.duration = const Duration(milliseconds: 800),
+    this.duration = const Duration(milliseconds: 450),
     this.delay = Duration.zero,
-    this.curve = Curves.easeOutBack,
-    this.beginScale = 0.0,
+    this.curve = Curves.easeOutCubic,
+    this.beginScale = 0.92,
   });
 
   @override
@@ -26,6 +27,8 @@ class _ScaleInAnimationState extends State<ScaleInAnimation>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _scale;
+  Timer? _delayTimer;
+  bool _started = false;
 
   @override
   void initState() {
@@ -42,14 +45,31 @@ class _ScaleInAnimationState extends State<ScaleInAnimation>
       parent: _controller,
       curve: widget.curve,
     ));
+  }
 
-    Future.delayed(widget.delay, () {
-      if (mounted) _controller.forward();
-    });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 1.0;
+      return;
+    }
+
+    if (widget.delay == Duration.zero) {
+      _controller.forward();
+    } else {
+      _delayTimer = Timer(widget.delay, () {
+        if (mounted) _controller.forward();
+      });
+    }
   }
 
   @override
   void dispose() {
+    _delayTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }

@@ -1,17 +1,21 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
-import 'package:flutter/foundation.dart';
+import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
   static const String defaultHost = 'api.ravamate.com/RAVAMATE_SANDBOX';
   static const String defaultDistCode = 'SANDBOX01';
   static const String defaultDriverCode = 'SBRM007';
+  static const String defaultSalesmanCode = 'DRP1';
+  static const String defaultCompanyName = 'PD8 SANDBOX';
 
   static const String keyHost = 'server_host';
   static const String keyDistCode = 'server_dist_code';
   static const String keyDriverCode = 'driver_md_code';
+  static const String keySalesmanCode = 'driver_salesman_code';
+  static const String keyCompanyName = 'server_company_name';
 
   static Dio? _dio;
 
@@ -44,6 +48,26 @@ class ApiClient {
   static Future<void> setDriverCode(String driverCode) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(keyDriverCode, driverCode);
+  }
+
+  static Future<String> getSalesmanCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(keySalesmanCode) ?? defaultSalesmanCode;
+  }
+
+  static Future<void> setSalesmanCode(String salesmanCode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(keySalesmanCode, salesmanCode);
+  }
+
+  static Future<String> getCompanyName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(keyCompanyName) ?? defaultCompanyName;
+  }
+
+  static Future<void> setCompanyName(String companyName) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(keyCompanyName, companyName);
   }
 
   static Future<Dio> getDio({
@@ -80,7 +104,7 @@ class ApiClient {
   static Future<List<Map<dynamic, dynamic>>> getList(String endpointWithQuery) async {
     try {
       final dio = await getDio();
-      debugPrint('[ApiClient GET] ${dio.options.baseUrl}$endpointWithQuery');
+      logSync('[GET] ${dio.options.baseUrl}$endpointWithQuery', tag: 'API HTTP');
       final response = await dio.get(endpointWithQuery);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -91,17 +115,14 @@ class ApiClient {
           return List<Map<dynamic, dynamic>>.from(data['data']);
         }
       }
-      debugPrint('[ApiClient Response] Status: ${response.statusCode}, Data: ${response.data}');
+      logWarning('[ApiClient Response] Status: ${response.statusCode}, Data: ${response.data}');
       return [];
     } catch (e) {
-      debugPrint('[ApiClient Error] $e');
+      logError('ApiClient HTTP Error on $endpointWithQuery', e);
       return [];
     }
   }
 
-  /// Verify driver credentials against RavaMate backend API.
-  /// If [password] is '123' (developer shortcut), it also attempts the known
-  /// backend test password 'k1m123' for the driver.
   static Future<Map<String, dynamic>?> verifyDriver(
     String username,
     String password,
@@ -122,7 +143,16 @@ class ApiClient {
     }
 
     if (results.isNotEmpty) {
-      return Map<String, dynamic>.from(results.first);
+      final first = Map<String, dynamic>.from(results.first);
+      final sc = (first['mdSalesmancode'] ?? first['salesmanCode'] ?? '').toString().trim();
+      if (sc.isNotEmpty) {
+        await setSalesmanCode(sc);
+      }
+      final company = (first['companyName'] ?? first['company'] ?? '').toString().trim();
+      if (company.isNotEmpty) {
+        await setCompanyName(company);
+      }
+      return first;
     }
     return null;
   }

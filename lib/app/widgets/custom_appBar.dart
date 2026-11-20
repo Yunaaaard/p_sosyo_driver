@@ -2,17 +2,22 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/core/constants/app_constants.dart';
+import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final bool showBackButton;
+  final Widget? trailing;
 
   const CustomAppBar({
     super.key,
     this.title = 'PSOSYO',
     this.showBackButton = false,
+    this.trailing,
   });
 
   @override
@@ -21,42 +26,59 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
 
     return Container(
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         border: Border(
           bottom: BorderSide(
-            color: Color(0xFFEBEBEB),
+            color: AppColors.border,
             width: 1.0,
           ),
         ),
       ),
-      child: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        leadingWidth: 56,
-        leading: showBackButton
-            ? IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  color: Color(0xFF8A8F99),
-                  size: 20,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: kToolbarHeight,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (showBackButton)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _AppBarIconButton(
+                      icon: Icons.arrow_back_ios_new_rounded,
+                      tooltip: 'Back',
+                      onTap: () => Get.back(),
+                    ),
+                  ),
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: showBackButton ? 52 : 24,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: isDefaultLogo
+                        ? HoldablePsosyoLogo(
+                            onLongHold: () => _showAdminLogoutDialog(context),
+                          )
+                        : Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.heading.copyWith(fontSize: 23),
+                          ),
+                  ),
                 ),
-                onPressed: () => Get.back(),
-              )
-            : null,
-        title: isDefaultLogo
-            ? HoldablePsosyoLogo(
-                onLongHold: () => _showAdminLogoutDialog(context),
-              )
-            : Text(
-                title,
-                style: const TextStyle(
-                  fontFamily: 'Poppins',
-                  color: Color(0xFF2F333A),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+                if (trailing != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: trailing!,
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -71,114 +93,174 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
+            return Dialog(
+              backgroundColor: AppColors.surface,
+              elevation: 0,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xxl,
+                vertical: AppSpacing.xxl,
+              ),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(AppRadii.xl),
+                side: const BorderSide(color: AppColors.border, width: 1),
               ),
-              title: const Text(
-                'Enter Admin Password',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2F333A),
-                ),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Enter password to clear data and logout.',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                      color: Color(0xFF8A8F99),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: passController,
-                    obscureText: isObscured,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: 'Password',
-                      hintStyle: const TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Color(0xFFB8BCC5),
-                        fontSize: 14,
-                      ),
-                      filled: true,
-                      fillColor: const Color(0xFFF6F6F8),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide.none,
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          isObscured
-                              ? Icons.visibility_off_rounded
-                              : Icons.visibility_rounded,
-                          color: const Color(0xFF8A8F99),
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xxl),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryTint,
+                            borderRadius: BorderRadius.circular(AppRadii.md),
+                          ),
+                          child: const Icon(
+                            Icons.admin_panel_settings_outlined,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
                         ),
-                        onPressed: () {
-                          setState(() {
-                            isObscured = !isObscured;
-                          });
-                        },
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Admin Verification',
+                                style: AppTypography.title,
+                              ),
+                              Text(
+                                'Clear local data and end session',
+                                style: AppTypography.caption.copyWith(
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    TextField(
+                      controller: passController,
+                      obscureText: isObscured,
+                      autofocus: true,
+                      style: AppTypography.bodyMedium,
+                      decoration: InputDecoration(
+                        hintText: 'Enter admin password',
+                        hintStyle: AppTypography.body.copyWith(
+                          color: AppColors.inkSubtle,
+                        ),
+                        filled: true,
+                        fillColor: AppColors.canvas,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                          vertical: 14,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadii.md),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadii.md),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadii.md),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 1.5,
+                          ),
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            isObscured
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            color: AppColors.inkMuted,
+                            size: 20,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              isObscured = !isObscured;
+                            });
+                          },
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: AppSpacing.xl),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.inkSecondary,
+                              side: const BorderSide(
+                                  color: AppColors.borderStrong),
+                              shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(AppRadii.md),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: AppTypography.label.copyWith(
+                                color: AppColors.inkSecondary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final entered = passController.text.trim();
+                              if (entered == 'k1m123' || kDebugMode) {
+                                Navigator.pop(dialogContext);
+                                await DatabaseService.to.logoutAndClearData();
+                              } else {
+                                Get.snackbar(
+                                  'Access Denied',
+                                  'Invalid password.',
+                                  snackPosition: SnackPosition.BOTTOM,
+                                  backgroundColor: AppColors.dangerTint,
+                                  colorText: AppColors.danger,
+                                  margin: const EdgeInsets.all(16),
+                                  borderRadius: 12,
+                                  duration: const Duration(seconds: 2),
+                                );
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(AppRadii.md),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                            ),
+                            child: Text(
+                              'Confirm',
+                              style: AppTypography.label.copyWith(
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      color: Color(0xFF8A8F99),
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    final entered = passController.text.trim();
-                    if (entered == 'k1m123' || kDebugMode) {
-                      Navigator.pop(dialogContext);
-                      await DatabaseService.to.logoutAndClearData();
-                    } else {
-                      Get.snackbar(
-                        'Access Denied',
-                        'Invalid password.',
-                        snackPosition: SnackPosition.BOTTOM,
-                        backgroundColor: const Color(0xFFFFEBEB),
-                        colorText: const Color(0xFFD32F2F),
-                        margin: const EdgeInsets.all(16),
-                        borderRadius: 12,
-                        duration: const Duration(seconds: 2),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6533E7),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Confirm',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
             );
           },
         );
@@ -187,7 +269,47 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight + 1);
+}
+
+class _AppBarIconButton extends StatelessWidget {
+  const _AppBarIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: AppColors.canvas,
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadii.md),
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadii.md),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Icon(
+              icon,
+              color: AppColors.inkPrimary,
+              size: 18,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class HoldablePsosyoLogo extends StatefulWidget {
@@ -197,7 +319,7 @@ class HoldablePsosyoLogo extends StatefulWidget {
   const HoldablePsosyoLogo({
     super.key,
     required this.onLongHold,
-    this.holdDuration = const Duration(seconds: 3),
+    this.holdDuration = AppConstants.adminHoldDuration,
   });
 
   @override
@@ -253,21 +375,41 @@ class _HoldablePsosyoLogoState extends State<HoldablePsosyoLogo>
       child: AnimatedBuilder(
         animation: _animController,
         builder: (context, child) {
-          final scale = 1.0 - (_animController.value * 0.08);
-          return Transform.scale(
-            scale: scale,
-            child: child,
+          final scale = 1.0 - (_animController.value * 0.06);
+          return Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              Transform.scale(
+                scale: scale,
+                child: child,
+              ),
+              if (_animController.value > 0.02)
+                Positioned(
+                  bottom: -4,
+                  child: SizedBox(
+                    width: 64,
+                    height: 2,
+                    child: LinearProgressIndicator(
+                      value: _animController.value,
+                      backgroundColor: AppColors.primaryTint,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           );
         },
-        child: const Text(
-          'PSOSYO',
-          style: TextStyle(
-            fontFamily: 'ITTENOVIANADEMO',
-            color: Color(0xFF6533E7),
-            fontSize: 26,
-            fontStyle: FontStyle.italic,
-            letterSpacing: 1.5,
-            fontWeight: FontWeight.w500,
+        child: SizedBox(
+          width: 140.4,
+          height: 24,
+          child: SvgPicture.asset(
+            AppConstants.appBarLogoAsset,
+            width: 140.4,
+            height: 24,
+            fit: BoxFit.contain,
           ),
         ),
       ),

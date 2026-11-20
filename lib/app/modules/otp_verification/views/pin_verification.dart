@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/core/constants/app_constants.dart';
+import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'package:p_sosyo_driver/app/modules/otp_verification/controller/pin_verification_controller.dart';
 
 class PinVerificationPage extends GetView<PinVerificationController> {
@@ -7,195 +11,151 @@ class PinVerificationPage extends GetView<PinVerificationController> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          // 1. Background Image
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/psosyo_background.png',
-              fit: BoxFit.cover,
-            ),
-          ),
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
-          // 2. Subtle Dark Vignette at Top
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.35),
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.12),
-                  ],
-                  stops: const [0.0, 0.35, 1.0],
+    return Scaffold(
+      backgroundColor: AppColors.canvas,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 1. Clean Rounded Navigation & Step Progress
+            _buildTopBar(),
+
+            // 2. Centered Passcode Header & 6 Rounded Slots
+            Expanded(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xxl,
+                    vertical: AppSpacing.lg,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: AppSpacing.xxl),
+                      _buildPinSlots(reduceMotion),
+                      const SizedBox(height: AppSpacing.md),
+                      Obx(() {
+                        if (!controller.isConfirming.value) {
+                          return const SizedBox(height: 36);
+                        }
+                        return SizedBox(
+                          height: 36,
+                          child: TextButton.icon(
+                            onPressed: controller.reset,
+                            icon: const Icon(
+                              Icons.refresh_rounded,
+                              size: 16,
+                              color: AppColors.primary,
+                            ),
+                            label: Text(
+                              'Change first passcode',
+                              style: AppTypography.caption.copyWith(
+                                fontSize: 17.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // 3. Clean Rounded Numeric Keypad Tray (No Grid Lines)
+            _buildKeypadDeck(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Material(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadii.md),
+            child: InkWell(
+              onTap: () {
+                if (controller.isConfirming.value) {
+                  controller.reset();
+                } else {
+                  Get.back();
+                }
+              },
+              borderRadius: BorderRadius.circular(AppRadii.md),
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: AppColors.inkPrimary,
+                  size: 18,
                 ),
               ),
             ),
           ),
-
-          // 3. Top Navigation Bar (Back Button)
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Row(
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Obx(() {
+              final stepTwo = controller.isConfirming.value;
+              return Row(
                 children: [
-                  Material(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                    child: InkWell(
-                      onTap: () {
-                        if (controller.isConfirming.value) {
-                          controller.reset();
-                        } else {
-                          Get.back();
-                        }
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          color: Colors.white,
-                          size: 20,
-                        ),
+                  Expanded(
+                    child: Container(
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(AppRadii.pill),
                       ),
                     ),
                   ),
-                  const Spacer(),
-                  Obx(
-                    () => Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 6,
-                      ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Container(
+                      height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            controller.isConfirming.value
-                                ? Icons.verified_user_outlined
-                                : Icons.lock_outline_rounded,
-                            color: Colors.white,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            controller.isConfirming.value
-                                ? 'Step 2 of 2'
-                                : 'Step 1 of 2',
-                            style: const TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
+                        color: stepTwo ? AppColors.primary : AppColors.border,
+                        borderRadius: BorderRadius.circular(AppRadii.pill),
                       ),
                     ),
                   ),
                 ],
-              ),
-            ),
+              );
+            }),
           ),
-
-          // 4. Bottom Card Container
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: FractionallySizedBox(
-              alignment: Alignment.bottomCenter,
-              heightFactor: 0.86,
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(36),
-                    topRight: Radius.circular(36),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6533E7).withOpacity(0.12),
-                      blurRadius: 36,
-                      offset: const Offset(0, -10),
-                    ),
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: SingleChildScrollView(
-                    physics: const ClampingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Top Drag Pill
-                        Center(
-                          child: Container(
-                            width: 44,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE2E4E8),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Logo / Header
-                        _buildHeader(),
-                        const SizedBox(height: 24),
-
-                        // Non-Overlapping 6 PIN Slots
-                        _buildPinSlots(),
-                        const SizedBox(height: 12),
-
-                        // Reset / Change PIN link if in confirming mode
-                        Obx(() {
-                          if (controller.isConfirming.value) {
-                            return Center(
-                              child: TextButton.icon(
-                                onPressed: controller.reset,
-                                icon: const Icon(
-                                  Icons.refresh_rounded,
-                                  size: 16,
-                                  color: Color(0xFF6533E7),
-                                ),
-                                label: const Text(
-                                  'Change first passcode',
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: Color(0xFF6533E7),
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-                          return const SizedBox(height: 32);
-                        }),
-
-                        // Clean Numeric Keypad (Numbers only, no letters)
-                        _buildKeypad(),
-                        const SizedBox(height: 8),
-                      ],
-                    ),
-                  ),
+          const SizedBox(width: AppSpacing.lg),
+          Obx(
+            () => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Text(
+                controller.isConfirming.value ? 'STEP 2 / 2' : 'STEP 1 / 2',
+                style: AppTypography.micro.copyWith(
+                  fontSize: 14,
+                  color: AppColors.inkSecondary,
+                  fontFeatures: AppTypography.tabular,
                 ),
               ),
             ),
@@ -205,49 +165,45 @@ class PinVerificationPage extends GetView<PinVerificationController> {
     );
   }
 
-  /// Builds the top logo, dynamic title & subtitle matching RavaMate.
   Widget _buildHeader() {
     return Column(
       children: [
-        Center(
-          child: Image.asset(
-            'assets/images/psosyo_login_logo.png',
-            height: 70,
+        Container(
+          width: 56,
+          height: 56,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: AppColors.primaryTint,
+            borderRadius: BorderRadius.circular(AppRadii.lg),
+            border: Border.all(color: AppColors.primaryBorder),
+          ),
+          child: SvgPicture.asset(
+            AppConstants.paqnerLogoAsset,
+            width: 34,
+            height: 26,
             fit: BoxFit.contain,
           ),
         ),
-        const SizedBox(height: 14),
-
-        // Title: Changes between 'Set New Passcode' and 'Confirm Passcode'
+        const SizedBox(height: AppSpacing.lg),
         Obx(
           () => Text(
             controller.isConfirming.value
                 ? 'Confirm Passcode'
                 : 'Set New Passcode',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2F333A),
-              letterSpacing: -0.3,
-            ),
+            style: AppTypography.display.copyWith(fontSize: 30),
           ),
         ),
         const SizedBox(height: 6),
-
-        // Subtitle: Changes dynamically matching RavaMate
         Obx(
           () => Text(
             controller.isConfirming.value
-                ? 'Re-enter your passcode to continue\nusing the app.'
-                : 'Create a new passcode to secure your\naccount.',
+                ? 'Re-enter your 6-digit passcode to confirm.'
+                : 'Create a 6-digit passcode to lock your driver session.',
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 13,
-              height: 1.4,
-              color: Color(0xFF8A8F99),
+            style: AppTypography.body.copyWith(
+              fontSize: 18,
+              color: AppColors.inkMuted,
             ),
           ),
         ),
@@ -255,162 +211,165 @@ class PinVerificationPage extends GetView<PinVerificationController> {
     );
   }
 
-  /// Builds the 6 PIN indicator boxes with responsive sizing that NEVER overlaps.
-  Widget _buildPinSlots() {
+  Widget _buildPinSlots(bool reduceMotion) {
     return Obx(() {
       final isConfirm = controller.isConfirming.value;
-      final value = isConfirm ? controller.confirmPin.value : controller.pin.value;
+      final value =
+          isConfirm ? controller.confirmPin.value : controller.pin.value;
 
-      return Center(
-        child: SizedBox(
-          width: 300,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(6, (index) {
-              final hasDigit = index < value.length;
-              final isActive = index == value.length;
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(PinVerificationController.pinLength, (index) {
+            final hasDigit = index < value.length;
+            final isActive = index == value.length;
 
-              return Container(
-                width: 40,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isActive
-                        ? const Color(0xFF6533E7)
-                        : hasDigit
-                            ? const Color(0xFF6533E7)
-                            : const Color(0xFFE2E4E8),
-                    width: isActive ? 2.0 : 1.5,
-                  ),
-                  boxShadow: isActive
-                      ? [
-                          BoxShadow(
-                            color: const Color(0xFF6533E7).withOpacity(0.18),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ]
-                      : null,
+            return AnimatedContainer(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 140),
+              width: 44,
+              height: 54,
+              decoration: BoxDecoration(
+                color: hasDigit ? AppColors.primaryTint : AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                border: Border.all(
+                  color: isActive || hasDigit
+                      ? AppColors.primary
+                      : AppColors.borderStrong,
+                  width: isActive ? 2.0 : 1.3,
                 ),
-                alignment: Alignment.center,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 150),
-                  transitionBuilder: (child, animation) {
-                    return ScaleTransition(
-                      scale: animation,
-                      child: child,
-                    );
-                  },
-                  child: Text(
-                    hasDigit ? '•' : '',
-                    key: ValueKey('slot_${isConfirm ? "c" : "p"}_${index}_$hasDigit'),
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 34,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF2F333A),
-                      height: 1.0,
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
+              ),
+              alignment: Alignment.center,
+              child: AnimatedSwitcher(
+                duration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 120),
+                transitionBuilder: (child, animation) =>
+                    ScaleTransition(scale: animation, child: child),
+                child: hasDigit
+                    ? Container(
+                        key: ValueKey('dot_${isConfirm ? "c" : "p"}_$index'),
+                        width: 12,
+                        height: 12,
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      )
+                    : SizedBox(
+                        key: ValueKey('empty_${isConfirm ? "c" : "p"}_$index'),
+                      ),
+              ),
+            );
+          }),
         ),
       );
     });
   }
 
-  /// Builds the numeric keypad (digits only, no complicated letters).
-  Widget _buildKeypad() {
-    return Column(
-      children: [
-        _buildKeypadRow(['1', '2', '3']),
-        const SizedBox(height: 8),
-        _buildKeypadRow(['4', '5', '6']),
-        const SizedBox(height: 8),
-        _buildKeypadRow(['7', '8', '9']),
-        const SizedBox(height: 8),
-        _buildBottomKeypadRow(),
-      ],
+  Widget _buildKeypadDeck() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.md,
+      ),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.xl),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildKeypadRow(['1', '2', '3']),
+          const SizedBox(height: AppSpacing.sm),
+          _buildKeypadRow(['4', '5', '6']),
+          const SizedBox(height: AppSpacing.sm),
+          _buildKeypadRow(['7', '8', '9']),
+          const SizedBox(height: AppSpacing.sm),
+          _buildBottomKeypadRow(),
+        ],
+      ),
     );
   }
 
   Widget _buildKeypadRow(List<String> digits) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: digits.map((digit) => _buildNumberKey(digit)).toList(),
+      children: [
+        for (int i = 0; i < digits.length; i++) ...[
+          if (i > 0) const SizedBox(width: AppSpacing.sm),
+          _buildNumberKey(digits[i]),
+        ],
+      ],
     );
   }
 
   Widget _buildBottomKeypadRow() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        // Delete Key (Left)
         Expanded(
           child: Material(
-            color: Colors.transparent,
+            color: AppColors.canvas,
+            borderRadius: BorderRadius.circular(AppRadii.md),
             child: InkWell(
-              onTap: controller.deleteDigit,
-              borderRadius: BorderRadius.circular(30),
-              splashColor: const Color(0xFFD32F2F).withOpacity(0.1),
-              child: Container(
-                height: 60,
-                alignment: Alignment.center,
-                child: const Text(
-                  'Delete',
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFFD32F2F),
+              onTap: () {
+                HapticFeedback.selectionClick();
+                controller.deleteDigit();
+              },
+              borderRadius: BorderRadius.circular(AppRadii.md),
+              child: const SizedBox(
+                height: 56,
+                child: Center(
+                  child: Icon(
+                    Icons.backspace_outlined,
+                    color: AppColors.inkSecondary,
+                    size: 22,
                   ),
                 ),
               ),
             ),
           ),
         ),
-
-        // '0' Key (Center)
+        const SizedBox(width: AppSpacing.sm),
         _buildNumberKey('0'),
-
-        // Submit / Confirm Key (Right)
+        const SizedBox(width: AppSpacing.sm),
         Expanded(
           child: Obx(() {
             final isReady = (controller.isConfirming.value
                     ? controller.confirmPin.value.length
                     : controller.pin.value.length) ==
-                6;
+                PinVerificationController.pinLength;
             final isSaving = controller.isSaving.value;
 
             return Material(
-              color: Colors.transparent,
+              color: isReady ? AppColors.primary : AppColors.surfaceMuted,
+              borderRadius: BorderRadius.circular(AppRadii.md),
               child: InkWell(
                 onTap: isReady && !isSaving ? controller.submitPin : null,
-                borderRadius: BorderRadius.circular(30),
-                splashColor: const Color(0xFF6533E7).withOpacity(0.2),
-                child: Container(
-                  height: 60,
-                  alignment: Alignment.center,
-                  child: isSaving
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            color: Color(0xFF6533E7),
-                            strokeWidth: 2.5,
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                child: SizedBox(
+                  height: 56,
+                  child: Center(
+                    child: isSaving
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2.4,
+                            ),
+                          )
+                        : Icon(
+                            Icons.arrow_forward_rounded,
+                            color: isReady ? Colors.white : AppColors.inkSubtle,
+                            size: 24,
                           ),
-                        )
-                      : Icon(
-                          Icons.arrow_forward_rounded,
-                          color: isReady
-                              ? const Color(0xFF6533E7)
-                              : const Color(0xFFC7CAD3),
-                          size: 30,
-                        ),
+                  ),
                 ),
               ),
             );
@@ -420,25 +379,28 @@ class PinVerificationPage extends GetView<PinVerificationController> {
     );
   }
 
-  /// Clean numeric key button with NO letters.
   Widget _buildNumberKey(String digit) {
     return Expanded(
       child: Material(
-        color: Colors.transparent,
+        color: AppColors.canvas,
+        borderRadius: BorderRadius.circular(AppRadii.md),
         child: InkWell(
-          onTap: () => controller.addDigit(digit),
-          borderRadius: BorderRadius.circular(30),
-          splashColor: const Color(0xFF6533E7).withOpacity(0.12),
-          child: Container(
-            height: 60,
-            alignment: Alignment.center,
-            child: Text(
-              digit,
-              style: const TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 26,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF2F333A),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            controller.addDigit(digit);
+          },
+          borderRadius: BorderRadius.circular(AppRadii.md),
+          splashColor: AppColors.primary.withOpacity(0.12),
+          child: SizedBox(
+            height: 56,
+            child: Center(
+              child: Text(
+                digit,
+                style: AppTypography.display.copyWith(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: AppTypography.tabular,
+                ),
               ),
             ),
           ),

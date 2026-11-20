@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
 class PesoFormatter {
+  static const List<FontFeature> _tabularFeatures = [
+    FontFeature.tabularFigures(),
+  ];
+
   static TextSpan buildPesoSymbolSpan({
     required double fontSize,
     required FontWeight fontWeight,
@@ -23,30 +27,15 @@ class PesoFormatter {
     required FontWeight fontWeight,
     required Color color,
   }) {
-    final cleanAmount = amount.replaceAll('₱', '').trim();
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          '₱',
-          style: TextStyle(
-            fontFamily: 'Arial',
-            fontSize: fontSize,
-            fontWeight: fontWeight,
-            color: color,
-          ),
-        ),
-        const SizedBox(width: 3),
-        Text(
-          cleanAmount,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: fontSize,
-            fontWeight: fontWeight,
-            color: color,
-          ),
-        ),
-      ],
+    return Text.rich(
+      buildPesoTextSpan(
+        amount: amount,
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 
@@ -59,7 +48,11 @@ class PesoFormatter {
     final cleanAmount = amount.replaceAll('₱', '').trim();
     return TextSpan(
       children: [
-        buildPesoSymbolSpan(fontSize: fontSize, fontWeight: fontWeight, color: color),
+        buildPesoSymbolSpan(
+          fontSize: fontSize,
+          fontWeight: fontWeight,
+          color: color,
+        ),
         const TextSpan(text: ' '),
         TextSpan(
           text: cleanAmount,
@@ -68,6 +61,7 @@ class PesoFormatter {
             fontSize: fontSize,
             fontWeight: fontWeight,
             color: color,
+            fontFeatures: _tabularFeatures,
           ),
         ),
       ],

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
+import 'package:p_sosyo_driver/app/data/services/bluetooth_printer_service.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/data/services/driver_sync_service.dart';
 import 'package:p_sosyo_driver/app/data/services/scanner_service.dart';
+import 'package:p_sosyo_driver/app/data/services/sms_service.dart';
 import 'app/routes/app_pages.dart';
 import 'app/routes/app_routes.dart';
 
@@ -21,6 +23,8 @@ void main() async {
   await Get.putAsync(() => DatabaseService().init());
   Get.put(ScannerService());
   Get.put(DriverSyncService());
+  Get.put(BluetoothPrinterService());
+  Get.put(SmsService());
 
   final initialRoute = await _resolveInitialRoute();
 
@@ -29,7 +33,7 @@ void main() async {
 
 Future<String> _resolveInitialRoute() async {
   final authenticatedDriver = await DatabaseService.to.getAuthenticatedDriver();
-  return authenticatedDriver != null ? AppRoutes.home : AppRoutes.landing;
+  return authenticatedDriver != null ? AppRoutes.home : AppRoutes.login;
 }
 
 class MyApp extends StatelessWidget {

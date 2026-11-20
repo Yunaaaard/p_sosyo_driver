@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
 import 'package:p_sosyo_driver/app/data/models/driver.dart';
 import 'package:p_sosyo_driver/app/data/providers/api_client.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
@@ -135,9 +136,10 @@ class LoginController extends GetxController {
         );
       }
 
+      logImportant('Driver $username successfully authenticated!');
       Get.toNamed(AppRoutes.pinVerification);
-    } catch (e) {
-      debugPrint('Login error: $e');
+    } catch (e, stack) {
+      logError('Login error', e, stack);
       Get.snackbar(
         'Error',
         'An unexpected error occurred. Please try again.',

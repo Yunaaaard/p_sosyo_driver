@@ -7,6 +7,8 @@ class Receipt {
   final String receiver;
   final String date;
   final String scannedAt;
+  final String? customerName;
+  final String? proofOfDeliveryPath;
 
   Receipt({
     this.id,
@@ -17,6 +19,8 @@ class Receipt {
     required this.receiver,
     required this.date,
     String? scannedAt,
+    this.customerName,
+    this.proofOfDeliveryPath,
   }) : scannedAt = scannedAt ?? DateTime.now().toIso8601String();
 
   /// Create a Receipt from a SQLite row map.
@@ -30,6 +34,8 @@ class Receipt {
       receiver: map['receiver'] as String,
       date: map['date'] as String,
       scannedAt: map['scanned_at'] as String,
+      customerName: map['customer_name']?.toString(),
+      proofOfDeliveryPath: map['proof_of_delivery_path']?.toString(),
     );
   }
 
@@ -44,6 +50,8 @@ class Receipt {
       'receiver': receiver,
       'date': date,
       'scanned_at': scannedAt,
+      'customer_name': customerName,
+      'proof_of_delivery_path': proofOfDeliveryPath,
     };
   }
 
