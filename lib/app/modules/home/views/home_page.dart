@@ -8,11 +8,14 @@ import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
 import 'package:p_sosyo_driver/app/core/utils/paqner_qr_codec.dart';
 import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
 import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
+import 'package:p_sosyo_driver/app/data/services/bluetooth_printer_service.dart';
+import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/modules/home/controller/home_controller.dart';
 import 'package:p_sosyo_driver/app/routes/app_routes.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_appBar.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_button.dart';
 import 'package:p_sosyo_driver/app/widgets/delivery_attempt_dialog.dart';
+import 'package:p_sosyo_driver/app/widgets/printer_picker_dialog.dart';
 import 'package:p_sosyo_driver/app/widgets/status_badge.dart';
 import 'package:p_sosyo_driver/app/widgets/store_image_widget.dart';
 
@@ -25,7 +28,9 @@ class HomePage extends GetView<HomeController> {
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
-      appBar: const CustomAppBar(),
+      appBar: CustomAppBar(
+        trailing: _buildSmsNotificationButton(context),
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -42,6 +47,54 @@ class HomePage extends GetView<HomeController> {
                 _buildRouteLedgerCard(reduceMotion),
                 const SizedBox(height: AppSpacing.lg),
                 _buildTabSelector(reduceMotion),
+                Obx(() {
+                  final filterIso = controller.selectedDateFilter.value;
+                  if (filterIso == null || filterIso.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.sm),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryTint,
+                        borderRadius: BorderRadius.circular(AppRadii.pill),
+                        border: Border.all(color: AppColors.primaryBorder),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 13,
+                            color: AppColors.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Date Filter: ${HomeController.formatDateLabel(filterIso)}',
+                            style: AppTypography.caption.copyWith(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: controller.clearDateFilter,
+                            child: const Icon(
+                              Icons.close_rounded,
+                              size: 16,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
               ],
             ),
           ),
@@ -52,7 +105,9 @@ class HomePage extends GetView<HomeController> {
             child: Obx(() {
               final active = controller.activeTab.value;
               final filtered = controller.orders
-                  .where((o) => o.status.value == active)
+                  .where((o) =>
+                      o.status.value == active &&
+                      controller.matchesDateFilter(o))
                   .toList();
 
               if (filtered.isEmpty) {
@@ -128,6 +183,309 @@ class HomePage extends GetView<HomeController> {
           _buildBottomNavBar(),
         ],
       ),
+    );
+  }
+
+  Widget _buildSmsNotificationButton(BuildContext context) {
+    return Obx(() {
+      final missingCount = controller.ordersMissingPhone.length;
+      final pendingCount = controller.ordersPendingSmsWithPhone.length;
+      final alertCount = missingCount + pendingCount;
+
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Tooltip(
+            message: 'SMS Notification Status',
+            child: Material(
+              color: alertCount > 0 ? AppColors.warningTint : AppColors.canvas,
+              borderRadius: BorderRadius.circular(AppRadii.md),
+              child: InkWell(
+                onTap: () => _showSmsNotificationStatusDialog(context),
+                borderRadius: BorderRadius.circular(AppRadii.md),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    border: Border.all(
+                      color: alertCount > 0
+                          ? AppColors.warningBorder
+                          : AppColors.border,
+                    ),
+                  ),
+                  child: Icon(
+                    alertCount > 0
+                        ? Icons.notifications_active_outlined
+                        : Icons.notifications_none_rounded,
+                    color: alertCount > 0
+                        ? AppColors.warning
+                        : AppColors.inkPrimary,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (alertCount > 0)
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: missingCount > 0 ? AppColors.danger : AppColors.warning,
+                  borderRadius: BorderRadius.circular(AppRadii.pill),
+                  border: Border.all(color: AppColors.surface, width: 1.5),
+                ),
+                child: Text(
+                  '$alertCount',
+                  style: AppTypography.monoRef.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    });
+  }
+
+  void _showSmsNotificationStatusDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return Obx(() {
+          final missing = controller.ordersMissingPhone;
+          final notified = controller.ordersSmsNotified;
+          final pending = controller.ordersPendingSmsWithPhone;
+
+          return Dialog(
+            backgroundColor: AppColors.surface,
+            elevation: 0,
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.xl,
+              vertical: AppSpacing.xxl,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.xl),
+              side: const BorderSide(color: AppColors.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: missing.isNotEmpty
+                              ? AppColors.warningTint
+                              : AppColors.successTint,
+                          borderRadius: BorderRadius.circular(AppRadii.md),
+                          border: Border.all(
+                            color: missing.isNotEmpty
+                                ? AppColors.warningBorder
+                                : AppColors.successBorder,
+                          ),
+                        ),
+                        child: Icon(
+                          missing.isNotEmpty
+                              ? Icons.sms_failed_outlined
+                              : Icons.mark_chat_read_outlined,
+                          size: 20,
+                          color: missing.isNotEmpty
+                              ? AppColors.warning
+                              : AppColors.success,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Customer SMS Status',
+                              style: AppTypography.title.copyWith(fontSize: 20),
+                            ),
+                            Text(
+                              '${notified.length} notified · ${missing.length} missing phone',
+                              style: AppTypography.caption.copyWith(
+                                fontSize: 14,
+                                color: AppColors.inkMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  if (missing.isEmpty && pending.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.successTint,
+                        borderRadius: BorderRadius.circular(AppRadii.md),
+                        border: Border.all(color: AppColors.successBorder),
+                      ),
+                      child: Text(
+                        'All Out-for-Delivery customers have received their mandatory SMS notification.',
+                        style: AppTypography.body.copyWith(
+                          fontSize: 15,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    )
+                  else ...[
+                    if (missing.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        decoration: BoxDecoration(
+                          color: AppColors.dangerTint,
+                          borderRadius: BorderRadius.circular(AppRadii.md),
+                          border: Border.all(color: AppColors.dangerBorder),
+                        ),
+                        child: Text(
+                          '${missing.length} ${missing.length == 1 ? 'customer did not' : 'customers did not'} receive the mandatory SMS because no phone number is assigned. Tap a store to add a phone number:',
+                          style: AppTypography.caption.copyWith(
+                            fontSize: 14,
+                            color: AppColors.danger,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 220),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: missing.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 6),
+                          itemBuilder: (_, idx) {
+                            final o = missing[idx];
+                            return Material(
+                              color: AppColors.canvas,
+                              borderRadius: BorderRadius.circular(AppRadii.md),
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.of(dialogContext).pop();
+                                  Get.toNamed(
+                                    AppRoutes.orderDetails,
+                                    arguments: o,
+                                  );
+                                },
+                                borderRadius:
+                                    BorderRadius.circular(AppRadii.md),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.md,
+                                    vertical: AppSpacing.sm,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius:
+                                        BorderRadius.circular(AppRadii.md),
+                                    border: Border.all(color: AppColors.border),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              o.storeName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppTypography.label
+                                                  .copyWith(fontSize: 15.5),
+                                            ),
+                                            Text(
+                                              'Ref #${o.id} · No phone number',
+                                              style: AppTypography.monoRef
+                                                  .copyWith(
+                                                fontSize: 12.5,
+                                                color: AppColors.danger,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: AppColors.inkMuted,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                    if (pending.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          for (final o in pending) {
+                            await controller.notifyCustomerOutForDelivery(o);
+                          }
+                        },
+                        icon: const Icon(Icons.sms_outlined, size: 18),
+                        label: Text(
+                          'Send Pending SMS (${pending.length})',
+                          style: AppTypography.label.copyWith(
+                            fontSize: 15.5,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadii.md),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                  const SizedBox(height: AppSpacing.md),
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.inkSecondary,
+                      side: const BorderSide(color: AppColors.border),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.md),
+                      ),
+                    ),
+                    child: Text(
+                      'Close',
+                      style: AppTypography.label.copyWith(
+                        fontSize: 16,
+                        color: AppColors.inkSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        });
+      },
     );
   }
 
@@ -344,12 +702,20 @@ class HomePage extends GetView<HomeController> {
     return Obx(() {
       final active = controller.activeTab.value;
       final outForDeliveryCount = controller.orders
-          .where((o) => o.status.value == 'Out for Delivery')
+          .where((o) =>
+              o.status.value == 'Out for Delivery' &&
+              controller.matchesDateFilter(o))
           .length;
-      final deliveredCount =
-          controller.orders.where((o) => o.status.value == 'Delivered').length;
-      final cancelledCount =
-          controller.orders.where((o) => o.status.value == 'Cancelled').length;
+      final deliveredCount = controller.orders
+          .where((o) =>
+              o.status.value == 'Delivered' &&
+              controller.matchesDateFilter(o))
+          .length;
+      final cancelledCount = controller.orders
+          .where((o) =>
+              o.status.value == 'Cancelled' &&
+              controller.matchesDateFilter(o))
+          .length;
 
       return Container(
         padding: const EdgeInsets.all(4),
@@ -552,10 +918,12 @@ class HomePage extends GetView<HomeController> {
       final now = controller.currentTime.value;
       final statusLower = order.status.value.trim().toLowerCase();
       final isOutForDelivery = statusLower == 'out for delivery';
+      final isDelivered = statusLower == 'delivered';
+      final isLocked = isOutForDelivery && order.isLocked;
       final isDeliveredCancelable = order.canCancelDelivered(now);
-      final canCancel = isOutForDelivery || isDeliveredCancelable;
+      final canSwipe = isOutForDelivery || isDelivered;
 
-      if (!canCancel) {
+      if (!canSwipe) {
         return _buildDeliveryCard(order);
       }
 
@@ -567,23 +935,21 @@ class HomePage extends GetView<HomeController> {
           alignment: Alignment.centerRight,
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           decoration: BoxDecoration(
-            color: isDeliveredCancelable
-                ? AppColors.danger
-                : AppColors.surfaceDark,
+            color: isLocked ? AppColors.danger : AppColors.surfaceDark,
             borderRadius: BorderRadius.circular(AppRadii.lg),
           ),
-          child: isDeliveredCancelable
+          child: isLocked
               ? Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(
-                      Icons.qr_code_2_rounded,
+                      Icons.cancel_outlined,
                       color: Colors.white,
                       size: 20,
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     Text(
-                      'Cancel via QR',
+                      'Cancel Delivery',
                       style: AppTypography.label.copyWith(
                         fontSize: 17,
                         color: Colors.white,
@@ -591,7 +957,72 @@ class HomePage extends GetView<HomeController> {
                     ),
                   ],
                 )
-              : Row(
+              : isDelivered
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isDeliveredCancelable) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.danger,
+                              borderRadius: BorderRadius.circular(AppRadii.sm),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.qr_code_2_rounded,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'Cancel',
+                                  style: AppTypography.label.copyWith(
+                                    fontSize: 15,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(AppRadii.sm),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.print_rounded,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Reprint',
+                                style: AppTypography.label.copyWith(
+                                  fontSize: 15,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
@@ -655,20 +1086,34 @@ class HomePage extends GetView<HomeController> {
                 ),
         ),
         confirmDismiss: (_) async {
-          if (isDeliveredCancelable) {
-            final reason = await _promptCancelReasonDialog(
-              context,
-              order,
-              requiresQrVerification: true,
-            );
-            if (reason == null || reason.trim().isEmpty) return false;
-            if (!context.mounted) return false;
-            await _showPaqnerCancelReceiptDialog(
-              context,
-              order,
-              cancelReason: reason,
-            );
-            return false;
+          if (isDelivered) {
+            if (isDeliveredCancelable) {
+              final action = await _promptDeliveredSwipeActionDialog(
+                context,
+                order,
+              );
+              if (action == null || !context.mounted) return false;
+              if (action == 'reprint') {
+                await _reprintDeliveredReceipt(context, order);
+                return false;
+              }
+              final reason = await _promptCancelReasonDialog(
+                context,
+                order,
+                requiresQrVerification: true,
+              );
+              if (reason == null || reason.trim().isEmpty) return false;
+              if (!context.mounted) return false;
+              await _showPaqnerCancelReceiptDialog(
+                context,
+                order,
+                cancelReason: reason,
+              );
+              return false;
+            } else {
+              await _reprintDeliveredReceipt(context, order);
+              return false;
+            }
           }
 
           final action = await _promptSwipeActionDialog(context, order);
@@ -1117,6 +1562,186 @@ class HomePage extends GetView<HomeController> {
         ),
       ),
       barrierColor: AppColors.surfaceDark.withOpacity(0.88),
+    );
+  }
+
+  Future<String?> _promptDeliveredSwipeActionDialog(
+    BuildContext context,
+    DeliveryOrder order,
+  ) {
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: AppColors.surface,
+          elevation: 0,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xl,
+            vertical: AppSpacing.xxl,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.xl),
+            side: const BorderSide(color: AppColors.border),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Delivered Order Options',
+                  style: AppTypography.title.copyWith(fontSize: 20),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${order.storeName} · Ref #${order.id}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.monoRef.copyWith(
+                    fontSize: 13.5,
+                    color: AppColors.inkMuted,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('cancel'),
+                        icon: const Icon(Icons.qr_code_2_rounded, size: 18),
+                        label: Text(
+                          'Cancel',
+                          style: AppTypography.label.copyWith(
+                            fontSize: 15.5,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.danger,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadii.md),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () =>
+                            Navigator.of(dialogContext).pop('reprint'),
+                        icon: const Icon(Icons.print_rounded, size: 18),
+                        label: Text(
+                          'Reprint',
+                          style: AppTypography.label.copyWith(
+                            fontSize: 15.5,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadii.md),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(null),
+                  child: Text(
+                    'Back',
+                    style: AppTypography.label.copyWith(
+                      fontSize: 15.5,
+                      color: AppColors.inkSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _reprintDeliveredReceipt(
+    BuildContext context,
+    DeliveryOrder order,
+  ) async {
+    if (!Get.isRegistered<BluetoothPrinterService>()) return;
+    final printerService = BluetoothPrinterService.to;
+    final ready = await printerService.ensureConnected();
+    if (!ready) {
+      final devices = await printerService.getPairedPrinters();
+      if (!context.mounted) return;
+      final selected = await showThermalPrinterPickerDialog(context, devices);
+      if (selected == null) return;
+      final connected = await printerService.connectPrinter(selected);
+      if (!connected) {
+        Get.snackbar(
+          'Printer Connection Failed',
+          'Could not connect to ${selected.name}.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: AppColors.dangerTint,
+          colorText: AppColors.danger,
+          margin: const EdgeInsets.all(16),
+          borderRadius: 12,
+        );
+        return;
+      }
+    }
+
+    final db = DatabaseService.to;
+    final receipts = await db.getReceipts(order.id);
+    final receipt = receipts.isNotEmpty ? receipts.last : null;
+    var items = await db.getOrderItems(order.id);
+    if (items.isEmpty && order.transactionId != order.id) {
+      items = await db.getOrderItems(order.transactionId);
+    }
+
+    final refNo = receipt?.referenceNumber.trim().isNotEmpty == true
+        ? receipt!.referenceNumber.trim()
+        : (order.paymentReference?.trim().isNotEmpty == true
+            ? order.paymentReference!.trim()
+            : order.id);
+    final dateStr = receipt?.date.trim().isNotEmpty == true
+        ? receipt!.date.trim()
+        : (order.deliveryDate.isNotEmpty
+            ? order.deliveryDate
+            : DateTime.now().toIso8601String().split('T').first);
+    final totalStr = receipt != null
+        ? PesoFormatter.formatAmount(receipt.totalAmount)
+        : PesoFormatter.formatAmount(order.numericTotalAmount);
+
+    final printed = await printerService.printDeliveryReceipt(
+      customerName: order.storeName,
+      referenceNumber: refNo,
+      date: dateStr,
+      totalAmount: totalStr,
+      items: items,
+    );
+
+    Get.snackbar(
+      printed ? 'Receipt Reprinted' : 'Reprint Failed',
+      printed
+          ? 'Delivery receipt for ${order.storeName} sent to thermal printer.'
+          : 'Please check Bluetooth printer paper and connection.',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor:
+          printed ? AppColors.successTint : AppColors.dangerTint,
+      colorText: printed ? AppColors.success : AppColors.danger,
+      margin: const EdgeInsets.all(16),
+      borderRadius: 12,
     );
   }
 
@@ -2001,13 +2626,13 @@ class HomePage extends GetView<HomeController> {
                 svgPath: 'assets/icons/endofday_icon.svg',
                 label: 'End of Day',
                 isPrimary: false,
-                onTap: () {},
+                onTap: () => Get.toNamed(AppRoutes.endOfDay),
               ),
               _buildBottomBarItem(
                 svgPath: 'assets/icons/date-icon.svg',
                 label: 'Date',
                 isPrimary: false,
-                onTap: () {},
+                onTap: () => Get.toNamed(AppRoutes.routeCalendar),
               ),
             ],
           ),

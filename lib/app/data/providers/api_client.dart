@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
@@ -105,14 +106,31 @@ class ApiClient {
     try {
       final dio = await getDio();
       logSync('[GET] ${dio.options.baseUrl}$endpointWithQuery', tag: 'API HTTP');
-      final response = await dio.get(endpointWithQuery);
+      final response = await dio.get<String>(
+        endpointWithQuery,
+        options: Options(responseType: ResponseType.plain),
+      );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = response.data;
-        if (data is List) {
-          return List<Map<dynamic, dynamic>>.from(data);
-        } else if (data is Map && data.containsKey('data') && data['data'] is List) {
-          return List<Map<dynamic, dynamic>>.from(data['data']);
+        final raw = (response.data ?? '').replaceFirst('\uFEFF', '').trim();
+        if (raw.isEmpty) return [];
+
+        dynamic decoded = _tryDecodeJson(raw);
+        if (decoded == null) {
+          final preview = raw.length > 250 ? '${raw.substring(0, 250)}...' : raw;
+          logWarning(
+            '[ApiClient Non-JSON Response] on $endpointWithQuery -> $preview',
+            tag: 'API HTTP',
+          );
+          return [];
+        }
+
+        if (decoded is List) {
+          return List<Map<dynamic, dynamic>>.from(decoded);
+        } else if (decoded is Map &&
+            decoded.containsKey('data') &&
+            decoded['data'] is List) {
+          return List<Map<dynamic, dynamic>>.from(decoded['data'] as List);
         }
       }
       logWarning('[ApiClient Response] Status: ${response.statusCode}, Data: ${response.data}');
@@ -120,6 +138,34 @@ class ApiClient {
     } catch (e) {
       logError('ApiClient HTTP Error on $endpointWithQuery', e);
       return [];
+    }
+  }
+
+  static dynamic _tryDecodeJson(String raw) {
+    try {
+      return jsonDecode(raw);
+    } catch (_) {
+      // Recover if backend prepended a PHP notice/warning before JSON array/object
+      final listStart = raw.indexOf('[');
+      final mapStart = raw.indexOf('{');
+      int start = -1;
+      String endChar = ']';
+      if (listStart != -1 && (mapStart == -1 || listStart < mapStart)) {
+        start = listStart;
+        endChar = ']';
+      } else if (mapStart != -1) {
+        start = mapStart;
+        endChar = '}';
+      }
+      if (start != -1) {
+        final end = raw.lastIndexOf(endChar);
+        if (end > start) {
+          try {
+            return jsonDecode(raw.substring(start, end + 1));
+          } catch (_) {}
+        }
+      }
+      return null;
     }
   }
 

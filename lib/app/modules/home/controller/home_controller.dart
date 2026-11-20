@@ -14,6 +14,7 @@ import 'package:p_sosyo_driver/app/widgets/sync_progress_dialog.dart';
 
 class HomeController extends GetxController {
   final RxString activeTab = "Out for Delivery".obs;
+  final RxnString selectedDateFilter = RxnString();
 
   final RxList<DeliveryOrder> orders = <DeliveryOrder>[].obs;
 
@@ -184,6 +185,45 @@ class HomeController extends GetxController {
 
   void changeTab(String tabName) {
     activeTab.value = tabName;
+  }
+
+  /// Resolves an order's effective YYYY-MM-DD date in Philippine Time (UTC+8).
+  static String resolveEffectiveDateIso(DeliveryOrder order) {
+    if (order.isLocked &&
+        order.scheduledDeliveryDate != null &&
+        order.scheduledDeliveryDate!.trim().length >= 10) {
+      return order.scheduledDeliveryDate!.trim().substring(0, 10);
+    }
+    if (order.deliveredAt != null && order.deliveredAt!.trim().isNotEmpty) {
+      final parsed = DateTime.tryParse(order.deliveredAt!.trim());
+      if (parsed != null) {
+        final pht = parsed.toUtc().add(const Duration(hours: 8));
+        return '${pht.year.toString().padLeft(4, '0')}-${pht.month.toString().padLeft(2, '0')}-${pht.day.toString().padLeft(2, '0')}';
+      }
+    }
+    final raw = order.deliveryDate.trim();
+    if (raw.length >= 10) {
+      return raw.substring(0, 10);
+    }
+    final nowPht = DateTime.now().toUtc().add(const Duration(hours: 8));
+    return '${nowPht.year.toString().padLeft(4, '0')}-${nowPht.month.toString().padLeft(2, '0')}-${nowPht.day.toString().padLeft(2, '0')}';
+  }
+
+  void setDateFilter(String? isoDate) {
+    final clean = isoDate?.trim();
+    selectedDateFilter.value =
+        (clean != null && clean.isNotEmpty) ? clean : null;
+    logImportant(
+      'Active Home date filter set to: ${selectedDateFilter.value ?? "ALL"}',
+    );
+  }
+
+  void clearDateFilter() => setDateFilter(null);
+
+  bool matchesDateFilter(DeliveryOrder order) {
+    final filter = selectedDateFilter.value;
+    if (filter == null || filter.isEmpty) return true;
+    return resolveEffectiveDateIso(order) == filter;
   }
 
   Future<void> markOrderAsDelivered(
@@ -508,6 +548,40 @@ class HomeController extends GetxController {
     if (index != -1) {
       orders[index] = orders[index].copyWith(paymentReference: cleanRef);
     }
+  }
+
+  /// Out-for-Delivery orders that have no valid phone number assigned,
+  /// so they did not receive the mandatory SMS notification.
+  List<DeliveryOrder> get ordersMissingPhone {
+    final sms = Get.isRegistered<SmsService>() ? SmsService.to : null;
+    return orders.where((o) {
+      if (o.status.value != 'Out for Delivery') return false;
+      final phone = o.customerPhone.trim();
+      if (phone.isEmpty) return true;
+      return sms != null && !sms.isValidPhoneNumber(phone);
+    }).toList();
+  }
+
+  /// Out-for-Delivery orders that have already received the mandatory SMS.
+  List<DeliveryOrder> get ordersSmsNotified {
+    return orders
+        .where((o) =>
+            o.status.value == 'Out for Delivery' &&
+            o.outForDeliverySmsSentAt?.trim().isNotEmpty == true)
+        .toList();
+  }
+
+  /// Out-for-Delivery orders that have a valid phone number but have not been
+  /// notified yet.
+  List<DeliveryOrder> get ordersPendingSmsWithPhone {
+    final sms = Get.isRegistered<SmsService>() ? SmsService.to : null;
+    return orders.where((o) {
+      if (o.status.value != 'Out for Delivery') return false;
+      if (o.outForDeliverySmsSentAt?.trim().isNotEmpty == true) return false;
+      final phone = o.customerPhone.trim();
+      if (phone.isEmpty) return false;
+      return sms == null || sms.isValidPhoneNumber(phone);
+    }).toList();
   }
 
   /// Manually sends or re-sends the "Out for Delivery" SMS for an order.

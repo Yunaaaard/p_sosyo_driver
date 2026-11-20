@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
 import 'package:p_sosyo_driver/app/core/utils/paqner_qr_codec.dart';
+import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
 import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
 import 'package:p_sosyo_driver/app/data/models/order_item.dart';
 import 'package:p_sosyo_driver/app/data/models/receipt.dart';
@@ -222,7 +223,7 @@ class ReceiptDetailsController extends GetxController {
         }
       }
 
-      // 7. Date ← appliedDate (with fallbacks)
+      // 7. Date ← appliedDate (with fallbacks, formatted in Philippine Time PHT)
       final rawDate = (data['appliedDate'] ??
               data['a'] ??
               data['date'] ??
@@ -230,31 +231,47 @@ class ReceiptDetailsController extends GetxController {
               '')
           .toString()
           .trim();
+      final phtNow = DateTime.now().toUtc().add(const Duration(hours: 8));
+      DateTime phtDateTime = phtNow;
       if (rawDate.isNotEmpty) {
-        try {
-          final dateTime = DateTime.parse(rawDate);
-          const months = [
-            'January',
-            'February',
-            'March',
-            'April',
-            'May',
-            'June',
-            'July',
-            'August',
-            'September',
-            'October',
-            'November',
-            'December',
-          ];
-          date.value =
-              '${months[dateTime.month - 1]} ${dateTime.day}, ${dateTime.year}';
-        } catch (_) {
-          date.value = rawDate;
+        final parsed = DateTime.tryParse(rawDate);
+        if (parsed != null) {
+          final hasTime = rawDate.contains(':') || rawDate.contains('T');
+          if (hasTime) {
+            phtDateTime = parsed.isUtc
+                ? parsed.add(const Duration(hours: 8))
+                : parsed.toUtc().add(const Duration(hours: 8));
+          } else {
+            phtDateTime = DateTime(
+              parsed.year,
+              parsed.month,
+              parsed.day,
+              phtNow.hour,
+              phtNow.minute,
+            );
+          }
         }
-      } else {
-        date.value = '';
       }
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      final hour24 = phtDateTime.hour;
+      final period = hour24 >= 12 ? 'PM' : 'AM';
+      final hour12 = hour24 == 0 ? 12 : (hour24 > 12 ? hour24 - 12 : hour24);
+      final min = phtDateTime.minute.toString().padLeft(2, '0');
+      date.value =
+          '${months[phtDateTime.month - 1]} ${phtDateTime.day}, ${phtDateTime.year} · ${hour12.toString().padLeft(2, '0')}:$min $period PHT';
 
       isScanned.value = true;
       logImportant(
@@ -295,10 +312,10 @@ class ReceiptDetailsController extends GetxController {
         : targetOrder.numericTotalAmount;
     if (expectedAmt > 0) {
       if (parsedAmount == null) {
-        return 'Receipt is missing a valid amount (expected ₱${expectedAmt.toStringAsFixed(2)}).';
+        return 'Receipt is missing a valid amount (expected ₱${PesoFormatter.formatAmount(expectedAmt)}).';
       }
       if ((parsedAmount - expectedAmt).abs() > 0.01) {
-        return 'Amount mismatch: Receipt is ₱${parsedAmount.toStringAsFixed(2)}, but ${targetOrder.storeName} expects ₱${expectedAmt.toStringAsFixed(2)}.';
+        return 'Amount mismatch: Receipt is ₱${PesoFormatter.formatAmount(parsedAmount)}, but ${targetOrder.storeName} expects ₱${PesoFormatter.formatAmount(expectedAmt)}.';
       }
     }
 
@@ -393,7 +410,7 @@ class ReceiptDetailsController extends GetxController {
           (parsedTotal == null || (parsedTotal - expectedAmt).abs() > 0.01)) {
         Get.snackbar(
           'Receipt Mismatch',
-          'Scanned receipt amount does not match ${targetOrder.storeName} (expected ₱${expectedAmt.toStringAsFixed(2)}).',
+          'Scanned receipt amount does not match ${targetOrder.storeName} (expected ₱${PesoFormatter.formatAmount(expectedAmt)}).',
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: const Color(0xFFFEECEC),
           colorText: const Color(0xFFC81E1E),

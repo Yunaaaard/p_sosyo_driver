@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/utils/location_helper.dart';
+import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
 
 class DeliveryOrder {
   final String id;
@@ -219,8 +220,8 @@ class DeliveryOrder {
       distance: map['distance']?.toString() ?? '',
       sku: map['sku_count']?.toString() ?? '0',
       totalAmount: map['total_amount'] is num
-          ? '₱ ${(map['total_amount'] as num).toStringAsFixed(2)}'
-          : (map['total_amount']?.toString() ?? '₱ 0.00'),
+          ? '₱ ${PesoFormatter.formatAmount((map['total_amount'] as num).toDouble())}'
+          : '₱ ${PesoFormatter.formatString(map['total_amount']?.toString() ?? '0.00')}',
       status: map['status']?.toString() ?? 'Out for Delivery',
       deliveryDate: map['delivery_date']?.toString() ?? '',
       latitude: map['latitude'] != null ? double.tryParse(map['latitude'].toString()) : null,

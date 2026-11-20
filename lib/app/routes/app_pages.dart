@@ -1,4 +1,6 @@
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/modules/end_of_day/bindings/end_of_day_binding.dart';
+import 'package:p_sosyo_driver/app/modules/end_of_day/views/end_of_day_page.dart';
 import 'package:p_sosyo_driver/app/modules/home/bindings/home_binding.dart';
 import 'package:p_sosyo_driver/app/modules/home/views/home_page.dart';
 import 'package:p_sosyo_driver/app/modules/login/bindings/login_binding.dart';
@@ -12,6 +14,8 @@ import 'package:p_sosyo_driver/app/modules/receipt_details/views/delivery_summar
 import 'package:p_sosyo_driver/app/modules/receipt_details/views/receipt_details.dart';
 import 'package:p_sosyo_driver/app/modules/qr_scanner/bindings/qr_scanner_binding.dart';
 import 'package:p_sosyo_driver/app/modules/qr_scanner/views/qr_scanner_page.dart';
+import 'package:p_sosyo_driver/app/modules/route_calendar/bindings/route_calendar_binding.dart';
+import 'package:p_sosyo_driver/app/modules/route_calendar/views/route_calendar_page.dart';
 import 'app_routes.dart';
 
 class AppPages {
@@ -49,6 +53,16 @@ class AppPages {
       name: AppRoutes.qrScanner,
       page: () => const QrScannerPage(),
       binding: QrScannerBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.endOfDay,
+      page: () => const EndOfDayPage(),
+      binding: EndOfDayBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.routeCalendar,
+      page: () => const RouteCalendarPage(),
+      binding: RouteCalendarBinding(),
     ),
   ];
 }

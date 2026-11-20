@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
 import 'package:p_sosyo_driver/app/data/models/order_item.dart';
@@ -9,6 +8,7 @@ import 'package:p_sosyo_driver/app/data/services/bluetooth_printer_service.dart'
 import 'package:p_sosyo_driver/app/routes/app_routes.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_appBar.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_button.dart';
+import 'package:p_sosyo_driver/app/widgets/printer_picker_dialog.dart';
 import 'package:p_sosyo_driver/app/widgets/status_badge.dart';
 
 class DeliverySummaryPage extends StatelessWidget {
@@ -353,7 +353,7 @@ class DeliverySummaryPage extends StatelessWidget {
     if (!ready) {
       final devices = await printerService.getPairedPrinters();
       if (!context.mounted) return;
-      final selected = await _showPrinterPickerDialog(context, devices);
+      final selected = await showThermalPrinterPickerDialog(context, devices);
       if (selected == null) return;
       final connected = await printerService.connectPrinter(selected);
       if (!connected) {
@@ -389,74 +389,6 @@ class DeliverySummaryPage extends StatelessWidget {
       colorText: printed ? AppColors.success : AppColors.danger,
       margin: const EdgeInsets.all(16),
       borderRadius: 12,
-    );
-  }
-
-  Future<BluetoothInfo?> _showPrinterPickerDialog(
-    BuildContext context,
-    List<BluetoothInfo> devices,
-  ) {
-    return showDialog<BluetoothInfo>(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.xl),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Select Thermal Printer',
-                style: AppTypography.title.copyWith(fontSize: 20),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                devices.isEmpty
-                    ? 'No paired Bluetooth printers found. Pair your thermal printer in Android Bluetooth settings first.'
-                    : 'Choose a paired Bluetooth printer:',
-                style: AppTypography.caption.copyWith(fontSize: 15),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              if (devices.isNotEmpty)
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 240),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: devices.length,
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1, color: AppColors.border),
-                    itemBuilder: (_, index) {
-                      final d = devices[index];
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(
-                          Icons.print_outlined,
-                          color: AppColors.primary,
-                        ),
-                        title: Text(d.name, style: AppTypography.label),
-                        subtitle: Text(
-                          d.macAdress,
-                          style: AppTypography.monoRef.copyWith(fontSize: 13),
-                        ),
-                        onTap: () => Navigator.of(dialogContext).pop(d),
-                      );
-                    },
-                  ),
-                ),
-              const SizedBox(height: AppSpacing.md),
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(null),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

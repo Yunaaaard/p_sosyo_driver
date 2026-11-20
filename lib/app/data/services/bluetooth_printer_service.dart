@@ -6,6 +6,7 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
+import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
 import 'package:p_sosyo_driver/app/data/models/order_item.dart';
 
 class BluetoothPrinterService extends GetxService {
@@ -242,9 +243,20 @@ class BluetoothPrinterService extends GetxService {
         await PrintBluetoothThermal.disconnect;
       }
 
-      final connected = await PrintBluetoothThermal.connect(
+      bool connected = await PrintBluetoothThermal.connect(
         macPrinterAddress: device.macAdress,
       );
+      if (!connected) {
+        logWarning(
+          'Initial printer connect failed for ${device.name}; resetting socket and retrying...',
+          tag: 'PRINTER',
+        );
+        await PrintBluetoothThermal.disconnect;
+        await Future.delayed(const Duration(milliseconds: 350));
+        connected = await PrintBluetoothThermal.connect(
+          macPrinterAddress: device.macAdress,
+        );
+      }
       isConnected.value = connected;
       if (connected) {
         connectedPrinterMac.value = device.macAdress;
@@ -328,9 +340,10 @@ class BluetoothPrinterService extends GetxService {
       );
       bytes.addAll(generator.hr());
 
-      bytes.addAll(generator.text('Customer: $customerName'));
-      bytes.addAll(generator.text('Ref No:   $referenceNumber'));
-      bytes.addAll(generator.text('Date:     $date'));
+      final formattedDate = _ensurePhilippineDateTime(date);
+      bytes.addAll(generator.text('Customer: ${_toAscii(customerName)}'));
+      bytes.addAll(generator.text('Ref No:   ${_toAscii(referenceNumber)}'));
+      bytes.addAll(generator.text('Date:     ${_toAscii(formattedDate)}'));
 
       if (items.isNotEmpty) {
         bytes.addAll(generator.hr());
@@ -339,9 +352,9 @@ class BluetoothPrinterService extends GetxService {
             bytes.addAll(generator.emptyLines(1));
           }
           final item = items[i];
-          bytes.addAll(generator.text(item.title));
-          final lineAmt = item.totalAmount.toStringAsFixed(2);
-          final unitAmt = item.price.toStringAsFixed(2);
+          bytes.addAll(generator.text(_toAscii(item.title)));
+          final lineAmt = PesoFormatter.formatAmount(item.totalAmount);
+          final unitAmt = PesoFormatter.formatAmount(item.price);
           bytes.addAll(
             generator.row([
               PosColumn(
@@ -358,10 +371,12 @@ class BluetoothPrinterService extends GetxService {
         }
       }
 
+      final cleanTotal =
+          _toAscii(PesoFormatter.formatString(totalAmount));
       bytes.addAll(generator.hr());
       bytes.addAll(
         generator.text(
-          'TOTAL AMOUNT: PHP $totalAmount',
+          'TOTAL AMOUNT: PHP $cleanTotal',
           styles: const PosStyles(
             align: PosAlign.center,
             bold: true,
@@ -371,10 +386,9 @@ class BluetoothPrinterService extends GetxService {
         ),
       );
       bytes.addAll(generator.hr());
-      bytes.addAll(generator.feed(2));
-      bytes.addAll(generator.cut());
+      bytes.addAll(generator.feed(3));
 
-      final printed = await PrintBluetoothThermal.writeBytes(bytes);
+      final printed = await _writeBytesChunked(bytes);
       logImportant(
         'Thermal receipt print result=$printed (Ref #$referenceNumber)',
         tag: 'PRINTER',
@@ -386,5 +400,152 @@ class BluetoothPrinterService extends GetxService {
     } finally {
       isPrinting.value = false;
     }
+  }
+
+  /// Prints a 58mm thermal End of Day route summary for the driver.
+  Future<bool> printEndOfDaySummary({
+    required String driverName,
+    required String dateLabel,
+    required int totalStops,
+    required int deliveredCount,
+    required int remainingCount,
+    required int queuedCount,
+    required int cancelledCount,
+    required double collectedAmount,
+    required double targetAmount,
+    required double pendingAmount,
+    required int podCount,
+    required int attemptCount,
+  }) async {
+    isPrinting.value = true;
+    try {
+      if (!await ensureConnected()) {
+        return false;
+      }
+      final profile = await CapabilityProfile.load();
+      final generator = Generator(PaperSize.mm58, profile);
+      final List<int> bytes = [];
+
+      bytes.addAll(generator.reset());
+      bytes.addAll(
+        generator.text(
+          'END OF DAY SUMMARY',
+          styles: const PosStyles(
+            align: PosAlign.center,
+            bold: true,
+            height: PosTextSize.size2,
+            width: PosTextSize.size1,
+          ),
+        ),
+      );
+      bytes.addAll(generator.hr());
+      bytes.addAll(generator.text('Driver:   ${_toAscii(driverName)}'));
+      bytes.addAll(generator.text(
+          'Date:     ${_toAscii(_ensurePhilippineDateTime(dateLabel))}'));
+      bytes.addAll(generator.hr());
+      bytes.addAll(generator.text('Total Stops:    $totalStops'));
+      bytes.addAll(generator.text('Delivered:      $deliveredCount'));
+      bytes.addAll(generator.text('Remaining:      $remainingCount'));
+      bytes.addAll(generator.text('Queued/Locked:  $queuedCount'));
+      bytes.addAll(generator.text('Cancelled:      $cancelledCount'));
+      bytes.addAll(generator.hr());
+      bytes.addAll(
+        generator.text(
+            'Target:    PHP ${PesoFormatter.formatAmount(targetAmount)}'),
+      );
+      bytes.addAll(
+        generator.text(
+            'Pending:   PHP ${PesoFormatter.formatAmount(pendingAmount)}'),
+      );
+      bytes.addAll(
+        generator.text(
+          'COLLECTED: PHP ${PesoFormatter.formatAmount(collectedAmount)}',
+          styles: const PosStyles(bold: true),
+        ),
+      );
+      bytes.addAll(generator.hr());
+      bytes.addAll(generator.feed(3));
+
+      final printed = await _writeBytesChunked(bytes);
+      logImportant('Thermal EOD summary print result=$printed', tag: 'PRINTER');
+      return printed;
+    } catch (e, stack) {
+      logError('Error printing EOD summary', e, stack);
+      return false;
+    } finally {
+      isPrinting.value = false;
+    }
+  }
+
+  String _ensurePhilippineDateTime(String rawDate) {
+    final trimmed = rawDate.trim();
+    if (trimmed.toUpperCase().contains('PHT')) {
+      return trimmed.replaceAll('·', '-');
+    }
+    final phtNow = DateTime.now().toUtc().add(const Duration(hours: 8));
+    final parsed = DateTime.tryParse(trimmed);
+    DateTime target = phtNow;
+    if (parsed != null) {
+      final hasTime = trimmed.contains(':') || trimmed.contains('T');
+      target = hasTime
+          ? (parsed.isUtc
+              ? parsed.add(const Duration(hours: 8))
+              : parsed.toUtc().add(const Duration(hours: 8)))
+          : DateTime(
+              parsed.year,
+              parsed.month,
+              parsed.day,
+              phtNow.hour,
+              phtNow.minute,
+            );
+    }
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final hour24 = target.hour;
+    final period = hour24 >= 12 ? 'PM' : 'AM';
+    final hour12 = hour24 == 0 ? 12 : (hour24 > 12 ? hour24 - 12 : hour24);
+    final min = target.minute.toString().padLeft(2, '0');
+    return '${months[target.month - 1]} ${target.day}, ${target.year} - ${hour12.toString().padLeft(2, '0')}:$min $period PHT';
+  }
+
+  String _toAscii(String input) {
+    return input
+        .replaceAll('₱', 'PHP ')
+        .replaceAll(RegExp(r'[^\x20-\x7E]'), '')
+        .trim();
+  }
+
+  /// Sends ESC/POS bytes in 512-byte chunks so portable 58mm thermal printer
+  /// buffers do not drop large payloads.
+  Future<bool> _writeBytesChunked(List<int> bytes) async {
+    if (bytes.isEmpty) return false;
+    const int chunkSize = 512;
+    for (int offset = 0; offset < bytes.length; offset += chunkSize) {
+      final end = (offset + chunkSize < bytes.length)
+          ? offset + chunkSize
+          : bytes.length;
+      final chunk = bytes.sublist(offset, end);
+      final ok = await PrintBluetoothThermal.writeBytes(chunk);
+      if (!ok) {
+        logWarning('Thermal printer chunk write returned false at $offset');
+        return false;
+      }
+      if (end < bytes.length) {
+        await Future.delayed(const Duration(milliseconds: 25));
+      }
+    }
+    return true;
   }
 }

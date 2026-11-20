@@ -426,8 +426,11 @@ class DatabaseService extends GetxService {
 
   Future<void> saveDeliveryOrdersBatch(List<DeliveryOrder> orders) async {
     final batch = _db.batch();
-    // Clear old delivery orders to prevent ghost or duplicate records across syncs
-    batch.delete('delivery_orders');
+    // Preserve completed/cancelled history from previous dates while replacing active manifest
+    batch.delete(
+      'delivery_orders',
+      where: "status = 'Out for Delivery' AND (is_locked IS NULL OR is_locked = 0)",
+    );
     for (final order in orders) {
       batch.insert(
         'delivery_orders',
@@ -548,6 +551,11 @@ class DatabaseService extends GetxService {
       whereArgs: [deliveryOrderId],
       orderBy: 'attempt_number ASC, id ASC',
     );
+    return results.map((map) => DeliveryAttempt.fromMap(map)).toList();
+  }
+
+  Future<List<DeliveryAttempt>> getAllDeliveryAttempts() async {
+    final results = await _db.query('delivery_attempts');
     return results.map((map) => DeliveryAttempt.fromMap(map)).toList();
   }
 
