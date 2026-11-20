@@ -7,4 +7,6 @@ class AppRoutes {
   static const String receiptDetails = '/receipt-details';
   static const String deliverySummary = '/delivery-summary';
   static const String qrScanner = '/qr-scanner';
+  static const String endOfDay = '/end-of-day';
+  static const String routeCalendar = '/route-calendar';
 }
