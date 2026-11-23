@@ -256,19 +256,8 @@ class EndOfDayPage extends GetView<EndOfDayController> {
                             ),
                             const Divider(height: 18, color: AppColors.border),
                             _SummaryMetricRow(
-                              label: 'Proof of Delivery (POD)',
-                              value:
-                                  '${controller.podCapturedCount.value} / ${controller.deliveredCount.value}',
-                            ),
-                            const Divider(height: 18, color: AppColors.border),
-                            _SummaryMetricRow(
                               label: 'Delivery Attempts Logged',
                               value: '${controller.totalAttemptsCount.value}',
-                            ),
-                            const Divider(height: 18, color: AppColors.border),
-                            _SummaryMetricRow(
-                              label: 'Customer SMS Sent',
-                              value: '${controller.smsSentCount.value}',
                             ),
                           ],
                         ),

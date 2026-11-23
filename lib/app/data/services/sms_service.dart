@@ -9,8 +9,7 @@ import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 class SmsService extends GetxService {
   static SmsService get to => Get.find<SmsService>();
 
-  static const MethodChannel _channel =
-      MethodChannel('com.example.p_sosyo_driver/sms');
+  static const MethodChannel _channel = MethodChannel('com.example.p_sosyo_driver/sms');
 
   /// Normalizes common Philippine phone formats (e.g. 09xx, +639xx, 639xx, 9xxxxxxxxx).
   String normalizePhoneNumber(String raw) {

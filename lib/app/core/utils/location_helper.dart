@@ -23,6 +23,18 @@ class LocationHelper {
   static const double defaultDriverLat = 10.369075;
   static const double defaultDriverLng = 123.925618;
 
+  /// Starts real-time GPS location updates on the native Android layer.
+  static Future<bool> startLocationUpdates() async {
+    try {
+      final started = await _channel
+          .invokeMethod<bool>('startLocationUpdates')
+          .timeout(const Duration(seconds: 2));
+      return started ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Query the device GPS location via native channel, falling back cleanly
   /// to [defaultDriverLat] / [defaultDriverLng].
   static Future<DriverCoordinates> getCurrentDriverLocation() async {

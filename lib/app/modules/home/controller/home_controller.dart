@@ -10,6 +10,8 @@ import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/data/services/driver_sync_service.dart';
 import 'package:p_sosyo_driver/app/data/services/scanner_service.dart';
 import 'package:p_sosyo_driver/app/data/services/sms_service.dart';
+import 'package:p_sosyo_driver/app/routes/app_routes.dart';
+import 'package:p_sosyo_driver/app/widgets/route_plan_choice_dialog.dart';
 import 'package:p_sosyo_driver/app/widgets/sync_progress_dialog.dart';
 
 class HomeController extends GetxController {
@@ -25,10 +27,14 @@ class HomeController extends GetxController {
   final RxDouble driverLongitude = LocationHelper.defaultDriverLng.obs;
   final Rx<DateTime> currentTime = DateTime.now().toUtc().obs;
   Timer? _cancelWindowTicker;
+  Timer? _liveLocationTicker;
 
   // Syncing states
   final RxBool isSyncing = false.obs;
   final RxBool isSyncCompleted = false.obs;
+  final RxBool isSyncDialogMinimized = false.obs;
+  final RxBool isMandatorySync = false.obs;
+  final RxBool syncFailed = false.obs;
   final RxDouble syncProgress = 0.0.obs;
   final RxString syncStatusMessage = ''.obs;
 
@@ -38,13 +44,95 @@ class HomeController extends GetxController {
     _cancelWindowTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       currentTime.value = DateTime.now().toUtc();
     });
+    LocationHelper.startLocationUpdates();
+    _liveLocationTicker = Timer.periodic(const Duration(seconds: 3), (_) {
+      refreshLiveDriverLocation();
+    });
     loadOrdersFromDb();
   }
 
   @override
   void onClose() {
     _cancelWindowTicker?.cancel();
+    _liveLocationTicker?.cancel();
     super.onClose();
+  }
+
+  /// Periodically updates each order's live distance (KM) as the driver moves,
+  /// without disturbing their active route sequence or drag-and-drop order.
+  Future<void> refreshLiveDriverLocation() async {
+    if (orders.isEmpty) return;
+    try {
+      final coords = await LocationHelper.getCurrentDriverLocation();
+      final movedKm = LocationHelper.calculateDistanceKm(
+        startLat: driverLatitude.value,
+        startLng: driverLongitude.value,
+        endLat: coords.latitude,
+        endLng: coords.longitude,
+      );
+      if (movedKm < 0.005) return; // Ignore < 5m GPS jitter
+      driverLatitude.value = coords.latitude;
+      driverLongitude.value = coords.longitude;
+      final updated = orders
+          .map(
+            (o) => o.withResolvedLocation(
+              driverLat: coords.latitude,
+              driverLng: coords.longitude,
+            ),
+          )
+          .toList();
+      orders.assignAll(updated);
+    } catch (_) {}
+  }
+
+  /// Allows the driver to drag-and-drop reorder unlocked Out-for-Delivery stops
+  /// (from either the "All" or "Out for Delivery" tab) and persists the updated
+  /// `routeSequence` (`1, 2, 3...`) to SQLite.
+  Future<void> reorderOutForDelivery(
+    List<DeliveryOrder> displayedList,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    if (oldIndex < 0 || oldIndex >= displayedList.length) return;
+    if (newIndex > oldIndex) newIndex -= 1;
+    if (newIndex < 0 || newIndex >= displayedList.length || oldIndex == newIndex) {
+      return;
+    }
+
+    final reordered = List<DeliveryOrder>.from(displayedList);
+    final moved = reordered.removeAt(oldIndex);
+    if (moved.isLocked || moved.status.value != 'Out for Delivery') return;
+
+    reordered.insert(newIndex, moved);
+
+    final List<({String orderId, String deliveryDate, int routeSequence})>
+        dbUpdates = [];
+    final Map<String, int> seqMap = {};
+    int seq = 1;
+    for (final o in reordered) {
+      if (o.status.value == 'Out for Delivery' && !o.isLocked) {
+        seqMap[o.id] = seq;
+        dbUpdates.add((
+          orderId: o.id,
+          deliveryDate: resolveEffectiveDateIso(o),
+          routeSequence: seq,
+        ));
+        seq++;
+      }
+    }
+
+    final updatedOrders = orders.map((o) {
+      final newSeq = seqMap[o.id];
+      return newSeq != null ? o.copyWith(routeSequence: newSeq) : o;
+    }).toList();
+    _sortOrdersList(updatedOrders);
+    orders.assignAll(updatedOrders);
+
+    await DatabaseService.to.applyWeeklyRoutePlan(dbUpdates);
+    logImportant(
+      'Driver reordered stop #${moved.id} (${moved.storeName}) -> sequence #${seqMap[moved.id]}',
+      tag: 'ROUTE_ORDER',
+    );
   }
 
   Future<void> loadOrdersFromDb() async {
@@ -110,14 +198,21 @@ class HomeController extends GetxController {
 
   void _sortOrdersList(List<DeliveryOrder> list) {
     list.sort((a, b) {
-      if (a.isLocked != b.isLocked) {
-        return a.isLocked ? 1 : -1;
+      final aUnplannedLocked = a.isLocked && a.routeSequence == null;
+      final bUnplannedLocked = b.isLocked && b.routeSequence == null;
+      if (aUnplannedLocked != bUnplannedLocked) {
+        return aUnplannedLocked ? 1 : -1;
       }
-      if (a.isLocked && b.isLocked) {
+      if (aUnplannedLocked && bUnplannedLocked) {
         final aDate = a.scheduledDeliveryDate ?? '';
         final bDate = b.scheduledDeliveryDate ?? '';
         final dateCmp = aDate.compareTo(bDate);
         if (dateCmp != 0) return dateCmp;
+      }
+      final aSeq = a.routeSequence ?? 999999;
+      final bSeq = b.routeSequence ?? 999999;
+      if (aSeq != bSeq) {
+        return aSeq.compareTo(bSeq);
       }
       final aKm = a.distanceKm ?? double.infinity;
       final bKm = b.distanceKm ?? double.infinity;
@@ -223,6 +318,7 @@ class HomeController extends GetxController {
   bool matchesDateFilter(DeliveryOrder order) {
     final filter = selectedDateFilter.value;
     if (filter == null || filter.isEmpty) return true;
+    if (order.isLocked && order.routeSequence == null) return true;
     return resolveEffectiveDateIso(order) == filter;
   }
 
@@ -451,6 +547,7 @@ class HomeController extends GetxController {
       scheduledDeliveryDate:
           lockAndQueue ? scheduledDateIso : existing.scheduledDeliveryDate,
       lockedAt: lockAndQueue ? nowIso : existing.lockedAt,
+      clearRouteSequence: lockAndQueue,
     );
     final sorted = orders.toList();
     _sortOrdersList(sorted);
@@ -605,8 +702,10 @@ class HomeController extends GetxController {
   }
 
   Future<void> syncDeliveries() async {
+    if (isSyncing.value) return;
     isSyncing.value = true;
     isSyncCompleted.value = false;
+    syncFailed.value = false;
     syncProgress.value = 0.08;
     syncStatusMessage.value = 'Connecting to dispatch server...';
     logSync('Dashboard triggered route synchronization...');
@@ -624,17 +723,33 @@ class HomeController extends GetxController {
         syncProgress.value = 1.0;
         isSyncing.value = false;
         isSyncCompleted.value = true;
+        syncFailed.value = false;
         final count = result.orderCount > 0 ? result.orderCount : orders.length;
         syncStatusMessage.value = count > 0
             ? '$count delivery orders synced & ready!'
             : 'Your delivery orders are now up to date.';
         logImportant('Sync completed: $count delivery orders synced and ready on dashboard!');
         await Future.delayed(const Duration(milliseconds: 1400));
-        if (Get.isDialogOpen ?? false) {
-          Get.back(); // Close dialog
+        if (!isSyncDialogMinimized.value && (Get.isDialogOpen ?? false)) {
+          Get.back(); // Close SyncProgressDialog
         }
+        isSyncDialogMinimized.value = false;
+        final activeOrders = orders
+            .where((o) => o.status.value == 'Out for Delivery' && !o.isLocked)
+            .toList();
+        final unplannedCount =
+            activeOrders.where((o) => o.routeSequence == null).length;
+        final displayCount =
+            unplannedCount > 0 ? unplannedCount : activeOrders.length;
+        showPostSyncRouteChoiceDialog(
+          unplannedCount: displayCount,
+          onSelectMode: (mode) {
+            Get.toNamed(AppRoutes.routePlanner, arguments: {'mode': mode});
+          },
+        );
       } else {
         isSyncing.value = false;
+        syncFailed.value = true;
         syncStatusMessage.value = result.message;
         logWarning('Sync finished with notice: ${result.message}');
         Get.snackbar(
@@ -647,25 +762,33 @@ class HomeController extends GetxController {
           borderRadius: 12,
           duration: const Duration(seconds: 3),
         );
-        await Future.delayed(const Duration(milliseconds: 1200));
-        if (Get.isDialogOpen ?? false) {
-          Get.back(); // Close dialog so driver can continue offline
-        }
       }
     } catch (e, stack) {
       isSyncing.value = false;
+      syncFailed.value = true;
+      syncStatusMessage.value = 'Sync failed. Tap Resync to try again.';
       logError('Sync error in HomeController', e, stack);
-      if (Get.isDialogOpen ?? false) {
-        Get.back();
-      }
     }
   }
 
-  void showSyncDialog() {
-    isSyncing.value = false;
-    isSyncCompleted.value = false;
-    syncProgress.value = 0.0;
-    syncStatusMessage.value = '';
+  void minimizeSyncDialog() {
+    if (isMandatorySync.value) return;
+    isSyncDialogMinimized.value = true;
+    if (Get.isDialogOpen ?? false) {
+      Get.back();
+    }
+  }
+
+  void showSyncDialog({bool mandatory = false}) {
+    isSyncDialogMinimized.value = false;
+    isMandatorySync.value = mandatory || orders.isEmpty;
+
+    if (!isSyncing.value) {
+      isSyncCompleted.value = false;
+      syncFailed.value = false;
+      syncProgress.value = 0.0;
+      syncStatusMessage.value = '';
+    }
 
     Get.dialog(
       SyncProgressDialog(controller: this),

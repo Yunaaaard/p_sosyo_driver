@@ -329,6 +329,7 @@ class DriverSyncService extends GetxService {
             isLocked: existingOrder?.isLocked ?? false,
             scheduledDeliveryDate: existingOrder?.scheduledDeliveryDate,
             lockedAt: existingOrder?.lockedAt,
+            routeSequence: existingOrder?.routeSequence,
           ),
         );
       }

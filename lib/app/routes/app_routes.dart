@@ -9,4 +9,5 @@ class AppRoutes {
   static const String qrScanner = '/qr-scanner';
   static const String endOfDay = '/end-of-day';
   static const String routeCalendar = '/route-calendar';
+  static const String routePlanner = '/route-planner';
 }

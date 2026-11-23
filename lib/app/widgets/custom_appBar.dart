@@ -11,12 +11,14 @@ import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String title;
   final bool showBackButton;
+  final Widget? leading;
   final Widget? trailing;
 
   const CustomAppBar({
     super.key,
     this.title = 'PSOSYO',
     this.showBackButton = false,
+    this.leading,
     this.trailing,
   });
 
@@ -43,7 +45,12 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                if (showBackButton)
+                if (leading != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: leading!,
+                  )
+                else if (showBackButton)
                   Align(
                     alignment: Alignment.centerLeft,
                     child: _AppBarIconButton(
@@ -54,7 +61,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: showBackButton ? 52 : 24,
+                    horizontal: (showBackButton || leading != null) ? 52 : 24,
                   ),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,

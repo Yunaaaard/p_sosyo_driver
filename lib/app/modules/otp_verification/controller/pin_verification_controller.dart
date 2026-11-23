@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
+import 'package:p_sosyo_driver/app/data/models/driver.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/modules/login/controller/login_controller.dart';
 import 'package:p_sosyo_driver/app/routes/app_routes.dart';
@@ -10,20 +11,54 @@ class PinVerificationController extends GetxController {
   final RxString confirmPin = "".obs;
   final RxBool isConfirming = false.obs;
   final RxBool isSaving = false.obs;
+  final RxBool isVerifyMode = false.obs;
   static const int pinLength = 6;
 
   final DatabaseService _dbService = DatabaseService.to;
+  Driver? _authenticatedDriver;
+
+  @override
+  void onInit() {
+    super.onInit();
+    _initMode();
+  }
+
+  Future<void> _initMode() async {
+    final hasLoginDriver = Get.isRegistered<LoginController>() &&
+        Get.find<LoginController>().currentDriver != null;
+    if (hasLoginDriver) {
+      isVerifyMode.value = false;
+      return;
+    }
+
+    final authDriver = await _dbService.getAuthenticatedDriver();
+    _authenticatedDriver = authDriver;
+    if (authDriver != null && authDriver.pin.trim().isNotEmpty) {
+      isVerifyMode.value = true;
+    }
+  }
 
   String get driverUsername {
     if (Get.isRegistered<LoginController>()) {
-      return Get.find<LoginController>().currentDriver?.username ?? '';
+      final loginUser = Get.find<LoginController>().currentDriver?.username;
+      if (loginUser != null && loginUser.isNotEmpty) return loginUser;
     }
-    return '';
+    return _authenticatedDriver?.username ?? '';
   }
 
-  /// Appends a digit to pin (Step 1) or confirmPin (Step 2)
+  /// Appends a digit to pin (Step 1 / Verify) or confirmPin (Step 2)
   void addDigit(String digit) {
     if (isSaving.value) return;
+
+    if (isVerifyMode.value) {
+      if (pin.value.length < pinLength) {
+        pin.value += digit;
+        if (pin.value.length == pinLength) {
+          Future.delayed(const Duration(milliseconds: 150), verifyExistingPin);
+        }
+      }
+      return;
+    }
 
     if (!isConfirming.value && pin.value.length < pinLength) {
       pin.value += digit;
@@ -40,6 +75,43 @@ class PinVerificationController extends GetxController {
         Future.delayed(const Duration(milliseconds: 180), submitPin);
       }
     }
+  }
+
+  /// Verifies the entered 6-digit passcode against the authenticated driver's PIN.
+  Future<void> verifyExistingPin() async {
+    if (isSaving.value) return;
+    isSaving.value = true;
+    try {
+      final driver =
+          _authenticatedDriver ?? await _dbService.getAuthenticatedDriver();
+      if (driver != null && pin.value == driver.pin.trim()) {
+        logImportant('Driver ${driver.username} unlocked session via passcode');
+        pin.value = '';
+        Get.offAllNamed(AppRoutes.home);
+      } else {
+        pin.value = '';
+        Get.snackbar(
+          'Incorrect Passcode',
+          'The passcode you entered is incorrect. Please try again.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: const Color(0xFFFFEBEB),
+          colorText: const Color(0xFFD32F2F),
+          margin: const EdgeInsets.all(16),
+          borderRadius: 12,
+          duration: const Duration(seconds: 2),
+        );
+      }
+    } catch (e, stack) {
+      logError('Passcode verification error', e, stack);
+    } finally {
+      isSaving.value = false;
+    }
+  }
+
+  /// Logs out of the locked session so another driver can sign in.
+  Future<void> switchAccount() async {
+    await _dbService.clearAuthenticatedDrivers();
+    Get.offAllNamed(AppRoutes.login);
   }
 
   /// Deletes the last entered digit
@@ -101,8 +173,9 @@ class PinVerificationController extends GetxController {
     isSaving.value = true;
 
     try {
-      final loginController = Get.find<LoginController>();
-      final driver = loginController.currentDriver;
+      final driver = Get.isRegistered<LoginController>()
+          ? Get.find<LoginController>().currentDriver
+          : _authenticatedDriver;
       final username = driver?.username ?? 'SMB0012';
 
       // 1. Update PIN in SQLite Database

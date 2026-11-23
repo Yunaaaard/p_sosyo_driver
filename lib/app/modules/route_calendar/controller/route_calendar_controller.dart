@@ -1,5 +1,7 @@
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
+import 'package:p_sosyo_driver/app/core/utils/location_helper.dart';
+import 'package:p_sosyo_driver/app/core/utils/route_plan_generator.dart';
 import 'package:p_sosyo_driver/app/data/models/delivery_attempt.dart';
 import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
 import 'package:p_sosyo_driver/app/data/models/receipt.dart';
@@ -148,11 +150,75 @@ class RouteCalendarController extends GetxController {
     analyticsPeriod.value = period;
   }
 
-  /// Orders and past transactions matching [dateIso].
+  /// Orders and past transactions matching [dateIso], ordered by routeSequence.
   List<DeliveryOrder> ordersForDate(String dateIso) {
-    return allOrders
+    final list = allOrders
         .where((o) => HomeController.resolveEffectiveDateIso(o) == dateIso)
         .toList();
+    list.sort((a, b) {
+      final aSeq = a.routeSequence ?? 999999;
+      final bSeq = b.routeSequence ?? 999999;
+      return aSeq.compareTo(bSeq);
+    });
+    return list;
+  }
+
+  int get unlockedOutForDeliveryCount => allOrders
+      .where((o) => o.status.value == 'Out for Delivery' && !o.isLocked)
+      .length;
+
+  /// Generates a clustered, 2-opt sequenced weekly route plan across [targetDays]
+  /// for all unlocked Out-for-Delivery orders.
+  Future<WeeklyPlanSummary> generateWeeklyRoutePlan({
+    required List<DateTime> targetDays,
+    int? maxStopsPerDay,
+    void Function(double progress, String stage)? onStageUpdate,
+  }) async {
+    onStageUpdate?.call(0.20, 'Resolving driver & store coordinates...');
+    final driverCoords = await LocationHelper.getCurrentDriverLocation();
+    await Future.delayed(const Duration(milliseconds: 280));
+
+    onStageUpdate?.call(0.50, 'Clustering delivery zones (K-Means++)...');
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    onStageUpdate?.call(0.75, 'Sequencing stops (2-Opt route chaining)...');
+    final summary = RoutePlanGenerator.generateWeeklyPlan(
+      orders: allOrders.toList(),
+      startLat: driverCoords.latitude,
+      startLng: driverCoords.longitude,
+      deliveryDays: targetDays,
+      maxStopsPerDay: maxStopsPerDay,
+    );
+
+    if (summary.assignments.isNotEmpty) {
+      onStageUpdate?.call(0.92, 'Saving weekly schedule...');
+      await DatabaseService.to.applyWeeklyRoutePlan(
+        summary.assignments
+            .map(
+              (a) => (
+                orderId: a.orderId,
+                deliveryDate: a.plannedDateIso,
+                routeSequence: a.routeSequence,
+              ),
+            )
+            .toList(),
+      );
+
+      await loadCalendarData();
+      if (Get.isRegistered<HomeController>()) {
+        await Get.find<HomeController>().loadOrdersFromDb();
+      }
+      if (targetDays.isNotEmpty) {
+        selectDay(targetDays.first);
+      }
+
+      logImportant(
+        'Generated weekly route plan: ${summary.assignments.length} stops across ${summary.daysUsed} days (~${summary.totalEstimatedKm.toStringAsFixed(1)} km)',
+        tag: 'ROUTE_PLAN',
+      );
+    }
+
+    return summary;
   }
 
   List<DeliveryOrder> get selectedDateOrders => ordersForDate(selectedDateIso);

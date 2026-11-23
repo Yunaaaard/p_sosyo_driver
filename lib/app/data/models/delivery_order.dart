@@ -30,6 +30,7 @@ class DeliveryOrder {
   final bool isLocked;
   final String? scheduledDeliveryDate;
   final String? lockedAt;
+  final int? routeSequence;
 
   DeliveryOrder({
     required this.id,
@@ -59,6 +60,7 @@ class DeliveryOrder {
     this.isLocked = false,
     this.scheduledDeliveryDate,
     this.lockedAt,
+    this.routeSequence,
   }) : transactionId = transactionId ?? id,
         custCode = custCode ?? '',
         storePhoto = storePhoto ?? '',
@@ -153,12 +155,14 @@ class DeliveryOrder {
       isLocked: isLocked,
       scheduledDeliveryDate: scheduledDeliveryDate,
       lockedAt: lockedAt,
+      routeSequence: routeSequence,
     );
     return order;
   }
 
   DeliveryOrder copyWith({
     String? status,
+    String? deliveryDate,
     String? deliveredAt,
     String? paymentReference,
     String? proofOfDeliveryPath,
@@ -174,6 +178,8 @@ class DeliveryOrder {
     bool clearScheduledDeliveryDate = false,
     String? lockedAt,
     bool clearLockedAt = false,
+    int? routeSequence,
+    bool clearRouteSequence = false,
   }) {
     return DeliveryOrder(
       id: id,
@@ -186,7 +192,7 @@ class DeliveryOrder {
       sku: sku,
       totalAmount: totalAmount,
       status: status ?? this.status.value,
-      deliveryDate: deliveryDate,
+      deliveryDate: deliveryDate ?? this.deliveryDate,
       latitude: latitude,
       longitude: longitude,
       distanceKm: distanceKm,
@@ -206,6 +212,8 @@ class DeliveryOrder {
           ? null
           : (scheduledDeliveryDate ?? this.scheduledDeliveryDate),
       lockedAt: clearLockedAt ? null : (lockedAt ?? this.lockedAt),
+      routeSequence:
+          clearRouteSequence ? null : (routeSequence ?? this.routeSequence),
     );
   }
 
@@ -239,6 +247,7 @@ class DeliveryOrder {
       isLocked: (map['is_locked'] as num?)?.toInt() == 1,
       scheduledDeliveryDate: map['scheduled_delivery_date']?.toString(),
       lockedAt: map['locked_at']?.toString(),
+      routeSequence: (map['route_sequence'] as num?)?.toInt(),
     );
   }
 
@@ -277,6 +286,7 @@ class DeliveryOrder {
       'is_locked': isLocked ? 1 : 0,
       'scheduled_delivery_date': scheduledDeliveryDate,
       'locked_at': lockedAt,
+      'route_sequence': routeSequence,
     };
   }
 }

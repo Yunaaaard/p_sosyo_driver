@@ -48,6 +48,7 @@ class DatabaseService extends GetxService {
     await _ensureColumnExists('delivery_orders', 'is_locked', 'INTEGER DEFAULT 0');
     await _ensureColumnExists('delivery_orders', 'scheduled_delivery_date', 'TEXT');
     await _ensureColumnExists('delivery_orders', 'locked_at', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 'route_sequence', 'INTEGER');
     await _ensureColumnExists('order_items', 'category', 'TEXT');
     await _ensureColumnExists('receipts', 'customer_name', 'TEXT');
     await _ensureColumnExists('receipts', 'proof_of_delivery_path', 'TEXT');
@@ -154,7 +155,8 @@ class DatabaseService extends GetxService {
         out_for_delivery_sms_sent_at TEXT,
         is_locked INTEGER NOT NULL DEFAULT 0,
         scheduled_delivery_date TEXT,
-        locked_at TEXT
+        locked_at TEXT,
+        route_sequence INTEGER
       )
     ''');
 
@@ -575,6 +577,9 @@ class DatabaseService extends GetxService {
     };
     if (isLocked != null) {
       updates['is_locked'] = isLocked ? 1 : 0;
+      if (isLocked) {
+        updates['route_sequence'] = null;
+      }
     }
     if (scheduledDeliveryDate != null) {
       updates['scheduled_delivery_date'] = scheduledDeliveryDate;
@@ -641,6 +646,25 @@ class DatabaseService extends GetxService {
       where: 'id = ? OR transaction_id = ?',
       whereArgs: [orderId, orderId],
     );
+  }
+
+  Future<void> applyWeeklyRoutePlan(
+    List<({String orderId, String deliveryDate, int routeSequence})> assignments,
+  ) async {
+    if (assignments.isEmpty) return;
+    final batch = _db.batch();
+    for (final a in assignments) {
+      batch.update(
+        'delivery_orders',
+        {
+          'delivery_date': a.deliveryDate,
+          'route_sequence': a.routeSequence,
+        },
+        where: 'id = ? OR transaction_id = ?',
+        whereArgs: [a.orderId, a.orderId],
+      );
+    }
+    await batch.commit(noResult: true);
   }
 
   @override

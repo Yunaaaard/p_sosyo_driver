@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'package:p_sosyo_driver/app/modules/home/controller/home_controller.dart';
+import 'package:p_sosyo_driver/app/widgets/app_date_picker.dart';
 
 class DeliveryAttemptInput {
   final String reason;
@@ -136,41 +137,65 @@ Future<DeliveryAttemptInput?> showDeliveryAttemptDialog(
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: presetReasons.map((reason) {
-                      final selected = selectedReason == reason;
-                      return ChoiceChip(
-                        label: Text(
-                          reason,
-                          style: AppTypography.caption.copyWith(
-                            fontSize: 14,
-                            fontWeight:
-                                selected ? FontWeight.w600 : FontWeight.w500,
-                            color: selected
-                                ? AppColors.warning
-                                : AppColors.inkSecondary,
+                  DropdownButtonFormField<String>(
+                    value: selectedReason,
+                    isExpanded: true,
+                    icon: const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: AppColors.warning,
+                    ),
+                    dropdownColor: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                    style: AppTypography.body.copyWith(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.inkPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: AppColors.canvas,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.sm + 4,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.md),
+                        borderSide: const BorderSide(color: AppColors.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.md),
+                        borderSide:
+                            const BorderSide(color: AppColors.warningBorder),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.md),
+                        borderSide: const BorderSide(
+                          color: AppColors.warning,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    items: presetReasons
+                        .map(
+                          (reason) => DropdownMenuItem<String>(
+                            value: reason,
+                            child: Text(
+                              reason,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                        selected: selected,
-                        selectedColor: AppColors.warningTint,
-                        backgroundColor: AppColors.canvas,
-                        side: BorderSide(
-                          color: selected
-                              ? AppColors.warningBorder
-                              : AppColors.border,
-                        ),
-                        onSelected: (_) {
-                          setState(() {
-                            selectedReason = reason;
-                            lockAndQueue =
-                                initialLockAndQueue || deferReasons.contains(reason);
-                            errorText = null;
-                          });
-                        },
-                      );
-                    }).toList(),
+                        )
+                        .toList(),
+                    onChanged: (reason) {
+                      if (reason == null) return;
+                      setState(() {
+                        selectedReason = reason;
+                        lockAndQueue =
+                            initialLockAndQueue || deferReasons.contains(reason);
+                        errorText = null;
+                      });
+                    },
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Container(
@@ -271,7 +296,7 @@ Future<DeliveryAttemptInput?> showDeliveryAttemptDialog(
                                   color: AppColors.primaryBorder,
                                 ),
                                 onPressed: () async {
-                                  final picked = await showDatePicker(
+                                  final picked = await showAppDatePicker(
                                     context: context,
                                     initialDate: selectedDate,
                                     firstDate: tomorrow,

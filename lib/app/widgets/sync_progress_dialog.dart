@@ -73,9 +73,11 @@ class _SyncProgressDialogState extends State<SyncProgressDialog>
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
+    return PopScope(
+      canPop: false,
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       insetPadding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.xxl,
         vertical: AppSpacing.xxl,
@@ -152,9 +154,31 @@ class _SyncProgressDialogState extends State<SyncProgressDialog>
                 // ── Primary Action ──
                 if (!isSyncing && !isCompleted)
                   CustomButton(
-                    label: 'Sync Now',
+                    label: (widget.controller.syncFailed.value ||
+                            !widget.controller.isMandatorySync.value)
+                        ? 'Resync'
+                        : 'Sync Now',
                     icon: Icons.sync_rounded,
                     onPressed: () => widget.controller.syncDeliveries(),
+                  )
+                else if (isSyncing && !widget.controller.isMandatorySync.value)
+                  OutlinedButton.icon(
+                    onPressed: () => widget.controller.minimizeSyncDialog(),
+                    icon: const Icon(Icons.open_in_new_off_rounded, size: 18),
+                    label: Text(
+                      'Sync in Background',
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primaryBorder),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.md),
+                      ),
+                    ),
                   )
                 else if (isCompleted)
                   CustomButton(
@@ -167,6 +191,7 @@ class _SyncProgressDialogState extends State<SyncProgressDialog>
             ),
           );
         }),
+      ),
       ),
     );
   }

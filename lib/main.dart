@@ -33,7 +33,9 @@ void main() async {
 
 Future<String> _resolveInitialRoute() async {
   final authenticatedDriver = await DatabaseService.to.getAuthenticatedDriver();
-  return authenticatedDriver != null ? AppRoutes.home : AppRoutes.login;
+  return authenticatedDriver != null
+      ? AppRoutes.pinVerification
+      : AppRoutes.login;
 }
 
 class MyApp extends StatelessWidget {
@@ -45,7 +47,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'PSosyo',
+      title: 'PAQNER',
       initialRoute: initialRoute,
       getPages: AppPages.pages,
       theme: AppThemes.lightTheme,

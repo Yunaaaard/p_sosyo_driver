@@ -10,6 +10,7 @@ import 'package:p_sosyo_driver/app/data/models/order_item.dart';
 import 'package:p_sosyo_driver/app/modules/home/controller/home_controller.dart';
 import 'package:p_sosyo_driver/app/modules/order_details/controller/order_details_controller.dart';
 import 'package:p_sosyo_driver/app/routes/app_routes.dart';
+import 'package:p_sosyo_driver/app/widgets/app_date_picker.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_appBar.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_button.dart';
 import 'package:p_sosyo_driver/app/widgets/delivery_attempt_dialog.dart';
@@ -407,7 +408,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                             onPressed: () async {
                               final tomorrow =
                                   DateTime.now().add(const Duration(days: 1));
-                              final picked = await showDatePicker(
+                              final picked = await showAppDatePicker(
                                 context: context,
                                 initialDate: DateTime.tryParse(controller
                                         .scheduledDeliveryDate.value) ??

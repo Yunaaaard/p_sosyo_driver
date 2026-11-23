@@ -9,9 +9,12 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
+import android.os.Looper
 import android.provider.Settings
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
@@ -29,13 +32,18 @@ class MainActivity: FlutterActivity() {
     private val SMS_PERMISSION_REQUEST_CODE = 1003
     private var pendingBtPermissionResult: MethodChannel.Result? = null
     private var pendingSmsPermissionResult: MethodChannel.Result? = null
+    private var liveLocation: Location? = null
+    private var locationListener: LocationListener? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LOCATION_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
+                "startLocationUpdates" -> {
+                    result.success(startLiveLocationUpdates())
+                }
                 "getCurrentLocation" -> {
-                    val loc = fetchBestLastKnownLocation()
+                    val loc = liveLocation ?: fetchBestLastKnownLocation()
                     if (loc != null) {
                         result.success(mapOf(
                             "latitude" to loc.latitude,
@@ -327,6 +335,64 @@ class MainActivity: FlutterActivity() {
         } catch (_: Exception) {
             false
         }
+    }
+
+    private fun startLiveLocationUpdates(): Boolean {
+        val fineGranted = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val coarseGranted = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!fineGranted && !coarseGranted) return false
+
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+        if (locationListener != null) return true
+
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) {
+                val current = liveLocation
+                if (current == null || location.accuracy <= current.accuracy + 15f || location.time > current.time) {
+                    liveLocation = location
+                }
+            }
+            @Deprecated("Deprecated in Java")
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+            override fun onProviderEnabled(provider: String) {}
+            override fun onProviderDisabled(provider: String) {}
+        }
+        locationListener = listener
+
+        try {
+            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    2500L,
+                    3f,
+                    listener,
+                    Looper.getMainLooper()
+                )
+            }
+            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER,
+                    4000L,
+                    5f,
+                    listener,
+                    Looper.getMainLooper()
+                )
+            }
+            return true
+        } catch (_: SecurityException) {
+            return false
+        }
+    }
+
+    override fun onDestroy() {
+        locationListener?.let { listener ->
+            try {
+                val lm = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                lm?.removeUpdates(listener)
+            } catch (_: Exception) {}
+        }
+        locationListener = null
+        super.onDestroy()
     }
 
     private fun fetchBestLastKnownLocation(): Location? {

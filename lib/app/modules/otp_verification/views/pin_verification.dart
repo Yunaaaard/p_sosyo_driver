@@ -13,63 +13,87 @@ class PinVerificationPage extends GetView<PinVerificationController> {
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
-    return Scaffold(
-      backgroundColor: AppColors.canvas,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 1. Clean Rounded Navigation & Step Progress
-            _buildTopBar(),
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: AppColors.canvas,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 1. Clean Rounded Step Progress (No Back Navigation)
+              _buildTopBar(),
 
-            // 2. Centered Passcode Header & 6 Rounded Slots
-            Expanded(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.xxl,
-                    vertical: AppSpacing.lg,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildHeader(),
-                      const SizedBox(height: AppSpacing.xxl),
-                      _buildPinSlots(reduceMotion),
-                      const SizedBox(height: AppSpacing.md),
-                      Obx(() {
-                        if (!controller.isConfirming.value) {
-                          return const SizedBox(height: 36);
-                        }
-                        return SizedBox(
-                          height: 36,
-                          child: TextButton.icon(
-                            onPressed: controller.reset,
-                            icon: const Icon(
-                              Icons.refresh_rounded,
-                              size: 16,
-                              color: AppColors.primary,
-                            ),
-                            label: Text(
-                              'Change first passcode',
-                              style: AppTypography.caption.copyWith(
-                                fontSize: 17.5,
-                                fontWeight: FontWeight.w600,
+              // 2. Centered Passcode Header & 6 Rounded Slots
+              Expanded(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xxl,
+                      vertical: AppSpacing.lg,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildHeader(),
+                        const SizedBox(height: AppSpacing.xxl),
+                        _buildPinSlots(reduceMotion),
+                        const SizedBox(height: AppSpacing.md),
+                        Obx(() {
+                          if (controller.isVerifyMode.value) {
+                            return SizedBox(
+                              height: 36,
+                              child: TextButton.icon(
+                                onPressed: controller.switchAccount,
+                                icon: const Icon(
+                                  Icons.logout_rounded,
+                                  size: 16,
+                                  color: AppColors.inkSecondary,
+                                ),
+                                label: Text(
+                                  'Switch account',
+                                  style: AppTypography.caption.copyWith(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.inkSecondary,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          if (!controller.isConfirming.value) {
+                            return const SizedBox(height: 36);
+                          }
+                          return SizedBox(
+                            height: 36,
+                            child: TextButton.icon(
+                              onPressed: controller.reset,
+                              icon: const Icon(
+                                Icons.refresh_rounded,
+                                size: 16,
                                 color: AppColors.primary,
                               ),
+                              label: Text(
+                                'Change first passcode',
+                                style: AppTypography.caption.copyWith(
+                                  fontSize: 17.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                ),
+                              ),
                             ),
-                          ),
-                        );
-                      }),
-                    ],
+                          );
+                        }),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
 
-            // 3. Clean Rounded Numeric Keypad Tray (No Grid Lines)
-            _buildKeypadDeck(),
-          ],
+              // 3. Clean Rounded Numeric Keypad Tray (No Grid Lines)
+              _buildKeypadDeck(),
+            ],
+          ),
         ),
       ),
     );
@@ -83,40 +107,48 @@ class PinVerificationPage extends GetView<PinVerificationController> {
         AppSpacing.lg,
         AppSpacing.sm,
       ),
-      child: Row(
-        children: [
-          Material(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(AppRadii.md),
-            child: InkWell(
-              onTap: () {
-                if (controller.isConfirming.value) {
-                  controller.reset();
-                } else {
-                  Get.back();
-                }
-              },
-              borderRadius: BorderRadius.circular(AppRadii.md),
-              child: Container(
-                width: 40,
-                height: 40,
+      child: Obx(() {
+        if (controller.isVerifyMode.value) {
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
                   border: Border.all(color: AppColors.border),
                 ),
-                child: const Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  color: AppColors.inkPrimary,
-                  size: 18,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.lock_outline_rounded,
+                      size: 14,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'SESSION LOCKED',
+                      style: AppTypography.micro.copyWith(
+                        fontSize: 13.5,
+                        color: AppColors.inkSecondary,
+                        fontFeatures: AppTypography.tabular,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.lg),
-          Expanded(
-            child: Obx(() {
-              final stepTwo = controller.isConfirming.value;
-              return Row(
+            ],
+          );
+        }
+
+        final stepTwo = controller.isConfirming.value;
+        return Row(
+          children: [
+            Expanded(
+              child: Row(
                 children: [
                   Expanded(
                     child: Container(
@@ -138,12 +170,10 @@ class PinVerificationPage extends GetView<PinVerificationController> {
                     ),
                   ),
                 ],
-              );
-            }),
-          ),
-          const SizedBox(width: AppSpacing.lg),
-          Obx(
-            () => Container(
+              ),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: AppColors.surface,
@@ -151,7 +181,7 @@ class PinVerificationPage extends GetView<PinVerificationController> {
                 border: Border.all(color: AppColors.border),
               ),
               child: Text(
-                controller.isConfirming.value ? 'STEP 2 / 2' : 'STEP 1 / 2',
+                stepTwo ? 'STEP 2 / 2' : 'STEP 1 / 2',
                 style: AppTypography.micro.copyWith(
                   fontSize: 14,
                   color: AppColors.inkSecondary,
@@ -159,9 +189,9 @@ class PinVerificationPage extends GetView<PinVerificationController> {
                 ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      }),
     );
   }
 
@@ -187,9 +217,11 @@ class PinVerificationPage extends GetView<PinVerificationController> {
         const SizedBox(height: AppSpacing.lg),
         Obx(
           () => Text(
-            controller.isConfirming.value
-                ? 'Confirm Passcode'
-                : 'Set New Passcode',
+            controller.isVerifyMode.value
+                ? 'Enter Passcode'
+                : controller.isConfirming.value
+                    ? 'Confirm Passcode'
+                    : 'Set New Passcode',
             textAlign: TextAlign.center,
             style: AppTypography.display.copyWith(fontSize: 30),
           ),
@@ -197,9 +229,11 @@ class PinVerificationPage extends GetView<PinVerificationController> {
         const SizedBox(height: 6),
         Obx(
           () => Text(
-            controller.isConfirming.value
-                ? 'Re-enter your 6-digit passcode to confirm.'
-                : 'Create a 6-digit passcode to lock your driver session.',
+            controller.isVerifyMode.value
+                ? 'Enter your 6-digit passcode to unlock your driver session.'
+                : controller.isConfirming.value
+                    ? 'Re-enter your 6-digit passcode to confirm.'
+                    : 'Create a 6-digit passcode to lock your driver session.',
             textAlign: TextAlign.center,
             style: AppTypography.body.copyWith(
               fontSize: 18,
