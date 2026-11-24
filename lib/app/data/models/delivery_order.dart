@@ -31,6 +31,17 @@ class DeliveryOrder {
   final String? scheduledDeliveryDate;
   final String? lockedAt;
   final int? routeSequence;
+  final String paymentMethod;
+  final bool isEarlyPriority;
+  final String? deliveryWindow;
+  final String syncStatus;
+
+  String get effectiveDeliveryWindow =>
+      (deliveryWindow == 'early' ||
+              deliveryWindow == 'normal' ||
+              deliveryWindow == 'late')
+          ? deliveryWindow!
+          : (isEarlyPriority ? 'early' : 'normal');
 
   DeliveryOrder({
     required this.id,
@@ -61,12 +72,31 @@ class DeliveryOrder {
     this.scheduledDeliveryDate,
     this.lockedAt,
     this.routeSequence,
+    String? paymentMethod,
+    bool? isEarlyPriority,
+    String? deliveryWindow,
+    String? syncStatus,
   }) : transactionId = transactionId ?? id,
         custCode = custCode ?? '',
         storePhoto = storePhoto ?? '',
         deliveryDate = deliveryDate ?? '',
         customerPhone = customerPhone ?? '',
         orderRemarks = orderRemarks ?? '',
+        paymentMethod = (paymentMethod != null && paymentMethod.trim().isNotEmpty)
+            ? paymentMethod.trim()
+            : 'Cash',
+        deliveryWindow = (deliveryWindow != null &&
+                (deliveryWindow == 'early' ||
+                    deliveryWindow == 'normal' ||
+                    deliveryWindow == 'late'))
+            ? deliveryWindow
+            : ((isEarlyPriority ?? false) ? 'early' : 'normal'),
+        isEarlyPriority = deliveryWindow != null
+            ? deliveryWindow == 'early'
+            : (isEarlyPriority ?? false),
+        syncStatus = (syncStatus != null && syncStatus.trim().isNotEmpty)
+            ? syncStatus.trim()
+            : 'synced',
         status = status.obs;
 
   /// Parsed UTC delivery completion timestamp for the 1-hour cancellation window.
@@ -156,11 +186,16 @@ class DeliveryOrder {
       scheduledDeliveryDate: scheduledDeliveryDate,
       lockedAt: lockedAt,
       routeSequence: routeSequence,
+      paymentMethod: paymentMethod,
+      isEarlyPriority: isEarlyPriority,
+      deliveryWindow: deliveryWindow,
+      syncStatus: syncStatus,
     );
     return order;
   }
 
   DeliveryOrder copyWith({
+    String? totalAmount,
     String? status,
     String? deliveryDate,
     String? deliveredAt,
@@ -180,6 +215,10 @@ class DeliveryOrder {
     bool clearLockedAt = false,
     int? routeSequence,
     bool clearRouteSequence = false,
+    String? paymentMethod,
+    bool? isEarlyPriority,
+    String? deliveryWindow,
+    String? syncStatus,
   }) {
     return DeliveryOrder(
       id: id,
@@ -190,7 +229,7 @@ class DeliveryOrder {
       address: address,
       distance: distance,
       sku: sku,
-      totalAmount: totalAmount,
+      totalAmount: totalAmount ?? this.totalAmount,
       status: status ?? this.status.value,
       deliveryDate: deliveryDate ?? this.deliveryDate,
       latitude: latitude,
@@ -214,6 +253,10 @@ class DeliveryOrder {
       lockedAt: clearLockedAt ? null : (lockedAt ?? this.lockedAt),
       routeSequence:
           clearRouteSequence ? null : (routeSequence ?? this.routeSequence),
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      isEarlyPriority: isEarlyPriority ?? this.isEarlyPriority,
+      deliveryWindow: deliveryWindow ?? this.deliveryWindow,
+      syncStatus: syncStatus ?? this.syncStatus,
     );
   }
 
@@ -248,6 +291,10 @@ class DeliveryOrder {
       scheduledDeliveryDate: map['scheduled_delivery_date']?.toString(),
       lockedAt: map['locked_at']?.toString(),
       routeSequence: (map['route_sequence'] as num?)?.toInt(),
+      paymentMethod: map['payment_method']?.toString() ?? 'Cash',
+      isEarlyPriority: (map['is_early_priority'] as num?)?.toInt() == 1,
+      deliveryWindow: map['delivery_window']?.toString(),
+      syncStatus: map['sync_status']?.toString() ?? 'synced',
     );
   }
 
@@ -287,6 +334,10 @@ class DeliveryOrder {
       'scheduled_delivery_date': scheduledDeliveryDate,
       'locked_at': lockedAt,
       'route_sequence': routeSequence,
+      'payment_method': paymentMethod,
+      'is_early_priority': isEarlyPriority ? 1 : 0,
+      'delivery_window': deliveryWindow,
+      'sync_status': syncStatus,
     };
   }
 }

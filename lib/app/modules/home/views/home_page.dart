@@ -17,6 +17,7 @@ import 'package:p_sosyo_driver/app/widgets/app_date_picker.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_appBar.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_button.dart';
 import 'package:p_sosyo_driver/app/widgets/delivery_attempt_dialog.dart';
+import 'package:p_sosyo_driver/app/widgets/home_sidebar_drawer.dart';
 import 'package:p_sosyo_driver/app/widgets/printer_picker_dialog.dart';
 import 'package:p_sosyo_driver/app/widgets/status_badge.dart';
 import 'package:p_sosyo_driver/app/widgets/store_image_widget.dart';
@@ -31,9 +32,12 @@ class HomePage extends GetView<HomeController> {
 
     return Scaffold(
       backgroundColor: AppColors.canvas,
+      drawer: HomeSidebarDrawer(
+        controller: controller,
+        onOpenNotifications: () => _showSmsNotificationStatusDialog(context),
+      ),
       appBar: CustomAppBar(
-        leading: _buildCalendarQuickButton(),
-        trailing: _buildSmsNotificationButton(context),
+        leading: _buildMenuDrawerButton(),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -246,8 +250,7 @@ class HomePage extends GetView<HomeController> {
                               final order = filtered[index];
                               return Padding(
                                 key: ValueKey('timeline_item_${order.id}'),
-                                padding:
-                                    const EdgeInsets.only(bottom: AppSpacing.md),
+                                padding: const EdgeInsets.only(bottom: 10),
                                 child: _buildTimelineStopRow(
                                   context,
                                   order: order,
@@ -269,7 +272,7 @@ class HomePage extends GetView<HomeController> {
                             ),
                             itemCount: filtered.length,
                             separatorBuilder: (_, __) =>
-                                const SizedBox(height: AppSpacing.md),
+                                const SizedBox(height: 10),
                             itemBuilder: (context, index) =>
                                 _buildTimelineStopRow(
                               context,
@@ -314,97 +317,56 @@ class HomePage extends GetView<HomeController> {
     );
   }
 
-  Widget _buildCalendarQuickButton() {
-    return Tooltip(
-      message: 'Route Calendar',
-      child: Material(
-        color: AppColors.canvas,
-        borderRadius: BorderRadius.circular(AppRadii.md),
-        child: InkWell(
-          onTap: () => Get.toNamed(AppRoutes.routeCalendar),
-          borderRadius: BorderRadius.circular(AppRadii.md),
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadii.md),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: const Icon(
-              Icons.calendar_month_rounded,
-              color: AppColors.primary,
-              size: 20,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSmsNotificationButton(BuildContext context) {
+  Widget _buildMenuDrawerButton() {
     return Obx(() {
-      final missingCount = controller.ordersMissingPhone.length;
-      final pendingCount = controller.ordersPendingSmsWithPhone.length;
-      final alertCount = missingCount + pendingCount;
+      final alertCount = controller.ordersMissingPhone.length +
+          controller.ordersPendingSmsWithPhone.length +
+          controller.orders.where((o) => o.syncStatus == 'pending').length;
 
-      return Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Tooltip(
-            message: 'SMS Notification Status',
-            child: Material(
-              color: alertCount > 0 ? AppColors.warningTint : AppColors.canvas,
-              borderRadius: BorderRadius.circular(AppRadii.md),
-              child: InkWell(
-                onTap: () => _showSmsNotificationStatusDialog(context),
+      return Builder(
+        builder: (btnContext) => Tooltip(
+          message: 'Driver Menu',
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Material(
+                color: AppColors.canvas,
                 borderRadius: BorderRadius.circular(AppRadii.md),
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppRadii.md),
-                    border: Border.all(
-                      color: alertCount > 0
-                          ? AppColors.warningBorder
-                          : AppColors.border,
+                child: InkWell(
+                  onTap: () => Scaffold.of(btnContext).openDrawer(),
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(AppRadii.md),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: const Icon(
+                      Icons.menu_rounded,
+                      color: AppColors.primary,
+                      size: 22,
                     ),
                   ),
-                  child: Icon(
-                    alertCount > 0
-                        ? Icons.notifications_active_outlined
-                        : Icons.notifications_none_rounded,
-                    color: alertCount > 0
-                        ? AppColors.warning
-                        : AppColors.inkPrimary,
-                    size: 20,
-                  ),
                 ),
               ),
-            ),
+              if (alertCount > 0)
+                Positioned(
+                  right: -3,
+                  top: -3,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: AppColors.danger,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                  ),
+                ),
+            ],
           ),
-          if (alertCount > 0)
-            Positioned(
-              top: -4,
-              right: -4,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                decoration: BoxDecoration(
-                  color: missingCount > 0 ? AppColors.danger : AppColors.warning,
-                  borderRadius: BorderRadius.circular(AppRadii.pill),
-                  border: Border.all(color: AppColors.surface, width: 1.5),
-                ),
-                child: Text(
-                  '$alertCount',
-                  style: AppTypography.monoRef.copyWith(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-        ],
+        ),
       );
     });
   }
@@ -1218,7 +1180,11 @@ class HomePage extends GetView<HomeController> {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: _buildSwipeableDeliveryCard(context, order),
+            child: ReorderableDelayedDragStartListener(
+              index: index,
+              enabled: isDraggable,
+              child: _buildSwipeableDeliveryCard(context, order),
+            ),
           ),
         ],
       ),
@@ -2369,67 +2335,15 @@ class HomePage extends GetView<HomeController> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    order.storeName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTypography.title.copyWith(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                                if (distanceBadge.isNotEmpty) ...[
-                                  const SizedBox(width: 6),
-                                  Material(
-                                    color: AppColors.primaryTint,
-                                    borderRadius:
-                                        BorderRadius.circular(AppRadii.pill),
-                                    child: InkWell(
-                                      onTap: () => controller
-                                          .openOrderNavigation(order),
-                                      borderRadius:
-                                          BorderRadius.circular(AppRadii.pill),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 3,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(
-                                              AppRadii.pill),
-                                          border: Border.all(
-                                            color: AppColors.primaryBorder,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(
-                                              Icons.directions_rounded,
-                                              size: 12,
-                                              color: AppColors.primary,
-                                            ),
-                                            const SizedBox(width: 3),
-                                            Text(
-                                              distanceBadge,
-                                              style: AppTypography.monoRef
-                                                  .copyWith(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w700,
-                                                color: AppColors.primary,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
+                            Text(
+                              order.storeName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.title.copyWith(
+                                fontSize: 17.5,
+                                fontWeight: FontWeight.w700,
+                                height: 1.2,
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Text(
@@ -2439,7 +2353,7 @@ class HomePage extends GetView<HomeController> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTypography.body.copyWith(
-                                fontSize: 15,
+                                fontSize: 14,
                                 color: AppColors.inkSecondary,
                               ),
                             ),
@@ -2489,28 +2403,27 @@ class HomePage extends GetView<HomeController> {
                     ],
                   ),
 
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    child: Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: AppColors.border.withOpacity(0.75),
-                    ),
-                  ),
+                  const SizedBox(height: 8),
 
-                  // 2. Compact Bottom Row: Total Amount + Action Buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
+                  // ── Amount & Distance Strip ──
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.canvas,
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
                           child: Text.rich(
                             PesoFormatter.buildPesoTextSpan(
                               amount: order.totalAmount
                                   .replaceAll('₱', '')
                                   .trim(),
-                              fontSize: 20.5,
+                              fontSize: 20,
                               fontWeight: FontWeight.w700,
                               color: isCancelled
                                   ? AppColors.inkMuted
@@ -2518,8 +2431,59 @@ class HomePage extends GetView<HomeController> {
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
+                        if (distanceBadge.isNotEmpty)
+                          Material(
+                            color: AppColors.primaryTint,
+                            borderRadius: BorderRadius.circular(AppRadii.pill),
+                            child: InkWell(
+                              onTap: () =>
+                                  controller.openOrderNavigation(order),
+                              borderRadius:
+                                  BorderRadius.circular(AppRadii.pill),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadii.pill),
+                                  border: Border.all(
+                                    color: AppColors.primaryBorder,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.directions_rounded,
+                                      size: 12,
+                                      color: AppColors.primary,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      distanceBadge,
+                                      style: AppTypography.monoRef.copyWith(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // 2. Dedicated Bottom Action Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
                       if (isDelivered)
                         Row(
                           mainAxisSize: MainAxisSize.min,
@@ -2661,10 +2625,90 @@ class HomePage extends GetView<HomeController> {
                           ],
                         )
                       else
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Material(
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Tooltip(
+                                message: order.customerPhone.trim().isNotEmpty
+                                    ? 'Copy & Call ${order.customerPhone}'
+                                    : 'Add Customer Phone',
+                                child: Material(
+                                  color: AppColors.primaryTint,
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadii.sm),
+                                  child: InkWell(
+                                    onTap: () {
+                                      final phone = order.customerPhone.trim();
+                                      if (phone.isEmpty) {
+                                        Get.toNamed(
+                                          AppRoutes.orderDetails,
+                                          arguments: order,
+                                        );
+                                      } else {
+                                        Clipboard.setData(
+                                            ClipboardData(text: phone));
+                                        Get.snackbar(
+                                          'Customer Phone Copied',
+                                          '$phone copied for ${order.storeName}',
+                                          snackPosition: SnackPosition.BOTTOM,
+                                          margin: const EdgeInsets.all(16),
+                                          borderRadius: 12,
+                                          duration: const Duration(seconds: 2),
+                                        );
+                                      }
+                                    },
+                                    borderRadius:
+                                        BorderRadius.circular(AppRadii.sm),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(7),
+                                      decoration: BoxDecoration(
+                                        borderRadius:
+                                            BorderRadius.circular(AppRadii.sm),
+                                        border: Border.all(
+                                          color: AppColors.primaryBorder,
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.phone_outlined,
+                                        size: 16,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Tooltip(
+                                message: 'Navigate to Stop',
+                                child: Material(
+                                  color: AppColors.successTint,
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadii.sm),
+                                  child: InkWell(
+                                    onTap: () =>
+                                        controller.openOrderNavigation(order),
+                                    borderRadius:
+                                        BorderRadius.circular(AppRadii.sm),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(7),
+                                      decoration: BoxDecoration(
+                                        borderRadius:
+                                            BorderRadius.circular(AppRadii.sm),
+                                        border: Border.all(
+                                          color: AppColors.successBorder,
+                                        ),
+                                      ),
+                                      child: const Icon(
+                                        Icons.near_me_outlined,
+                                        size: 16,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              Material(
                               color: AppColors.warningTint,
                               borderRadius: BorderRadius.circular(AppRadii.sm),
                               child: InkWell(
@@ -2741,6 +2785,7 @@ class HomePage extends GetView<HomeController> {
                             ),
                           ],
                         ),
+                      ),
                     ],
                   ),
                 ],

@@ -20,6 +20,7 @@ class OrderDetailsController extends GetxController {
   final RxString orderStatus = 'Out for Delivery'.obs;
   final RxBool isLocked = false.obs;
   final RxString scheduledDeliveryDate = ''.obs;
+  final RxString paymentMethod = 'Cash'.obs;
   final RxBool isSendingSms = false.obs;
   final RxBool isLoading = true.obs;
   String? _generatedReferenceId;
@@ -36,6 +37,7 @@ class OrderDetailsController extends GetxController {
       orderStatus.value = order?.status.value ?? 'Out for Delivery';
       isLocked.value = order?.isLocked ?? false;
       scheduledDeliveryDate.value = order?.scheduledDeliveryDate ?? '';
+      paymentMethod.value = order?.paymentMethod ?? 'Cash';
       final savedRef = order?.paymentReference?.trim() ?? '';
       if (savedRef.isNotEmpty) {
         _generatedReferenceId = savedRef;
@@ -56,6 +58,61 @@ class OrderDetailsController extends GetxController {
   String get storePhoto => order?.storePhoto ?? '';
 
   String get orderRemarks => order?.orderRemarks ?? '';
+
+  Future<void> togglePaymentMethod() async {
+    final targetId = orderId;
+    if (targetId.isEmpty) return;
+    final next = paymentMethod.value == 'Digital/QR' ? 'Cash' : 'Digital/QR';
+    paymentMethod.value = next;
+    await _dbService.updateOrderPaymentMethod(targetId, next);
+    if (Get.isRegistered<HomeController>()) {
+      await Get.find<HomeController>().loadOrdersFromDb();
+    }
+    logImportant('Payment method for #$targetId set to $next');
+  }
+
+  Future<void> adjustOrderItemQuantity({
+    required OrderItem item,
+    required int newQty,
+    required String reason,
+  }) async {
+    final itemId = item.id;
+    final targetId = orderId;
+    if (itemId == null || targetId.isEmpty) return;
+
+    final origQty = item.originalQty ?? item.numericQty;
+    final clampedQty = newQty.clamp(0, origQty);
+    final newItemTotal = item.price * clampedQty;
+
+    final idx = items.indexWhere((i) => i.id == itemId);
+    if (idx != -1) {
+      items[idx] = item.copyWith(
+        orderedQty: '$clampedQty',
+        totalAmount: newItemTotal,
+        adjustmentReason: reason,
+        originalQty: origQty,
+      );
+      items.refresh();
+    }
+
+    final newOrderTotal = items.fold(0.0, (sum, i) => sum + i.totalAmount);
+    await _dbService.updateOrderItemDeliveryAdjustment(
+      itemId: itemId,
+      orderId: targetId,
+      newQty: clampedQty,
+      newItemTotal: newItemTotal,
+      reason: reason,
+      originalQty: origQty,
+      newOrderTotal: newOrderTotal,
+    );
+    if (Get.isRegistered<HomeController>()) {
+      await Get.find<HomeController>().loadOrdersFromDb();
+    }
+    logImportant(
+      'Adjusted SKU ${item.title} on #$targetId: $origQty -> $clampedQty ($reason)',
+      tag: 'PARTIAL_DELIVERY',
+    );
+  }
 
   Future<void> loadDeliveryAttempts() async {
     final targetId = orderId;

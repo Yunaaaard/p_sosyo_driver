@@ -109,39 +109,7 @@ class PinVerificationPage extends GetView<PinVerificationController> {
       ),
       child: Obx(() {
         if (controller.isVerifyMode.value) {
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppRadii.sm),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.lock_outline_rounded,
-                      size: 14,
-                      color: AppColors.primary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'SESSION LOCKED',
-                      style: AppTypography.micro.copyWith(
-                        fontSize: 13.5,
-                        color: AppColors.inkSecondary,
-                        fontFeatures: AppTypography.tabular,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
+          return const SizedBox.shrink();
         }
 
         final stepTwo = controller.isConfirming.value;

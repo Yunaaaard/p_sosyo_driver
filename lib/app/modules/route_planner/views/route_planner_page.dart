@@ -371,6 +371,60 @@ class RoutePlannerPage extends GetView<RoutePlannerController> {
                         ),
                       ],
                     ),
+                    if (isTodayMode) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          InkWell(
+                            onTap: () => controller.toggleEndNearDepot(
+                              !controller.endNearDepot.value,
+                            ),
+                            borderRadius: BorderRadius.circular(AppRadii.pill),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: controller.endNearDepot.value
+                                    ? AppColors.primaryTint
+                                    : AppColors.surface,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadii.pill),
+                                border: Border.all(
+                                  color: controller.endNearDepot.value
+                                      ? AppColors.primaryBorder
+                                      : AppColors.border,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.home_work_outlined,
+                                    size: 14,
+                                    color: controller.endNearDepot.value
+                                        ? AppColors.primary
+                                        : AppColors.inkMuted,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    'End Near Depot',
+                                    style: AppTypography.monoRef.copyWith(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: controller.endNearDepot.value
+                                          ? AppColors.primary
+                                          : AppColors.inkSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -433,6 +487,7 @@ class RoutePlannerPage extends GetView<RoutePlannerController> {
                         itemBuilder: (context, index) {
                           final order = displayedStops[index];
                           final overdue = controller.isOverdue(order);
+                          final delayDays = controller.overdueDays(order);
                           final isLast = index == displayedStops.length - 1;
 
                           return Padding(
@@ -499,199 +554,322 @@ class RoutePlannerPage extends GetView<RoutePlannerController> {
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
-                                    child: SurfaceCard(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: AppSpacing.md,
-                                        vertical: AppSpacing.sm + 2,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          StoreImageWidget(
-                                            imageUrl: order.storePhoto,
-                                            custCode: order.custCode,
-                                            width: 40,
-                                            height: 40,
-                                            borderRadius: BorderRadius.circular(
-                                                AppRadii.sm),
-                                            fallback: Container(
-                                              width: 40,
-                                              height: 40,
-                                              decoration: BoxDecoration(
-                                                color: AppColors.primaryTint,
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                        AppRadii.sm),
-                                              ),
-                                              child: const Icon(
-                                                Icons.storefront_rounded,
-                                                size: 18,
-                                                color: AppColors.primary,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Column(
+                                    child: ReorderableDelayedDragStartListener(
+                                      index: index,
+                                      child: SurfaceCard(
+                                        padding:
+                                            const EdgeInsets.all(AppSpacing.md),
+                                        borderColor: overdue
+                                            ? AppColors.dangerBorder
+                                            : AppColors.border,
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            Row(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
-                                                Text(
-                                                  order.storeName,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: AppTypography.label
-                                                      .copyWith(fontSize: 15.5),
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Row(
-                                                  children: [
-                                                    if (order.isLocked || order.attemptCount > 0)
-                                                      Container(
-                                                        margin: const EdgeInsets
-                                                            .only(right: 5),
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .symmetric(
-                                                          horizontal: 5,
-                                                          vertical: 1,
-                                                        ),
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: AppColors
-                                                              .warningTint,
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      AppRadii
-                                                                          .sm),
-                                                        ),
-                                                        child: Text(
-                                                          '${order.attemptCount} ${order.attemptCount == 1 ? 'ATTEMPT' : 'ATTEMPTS'}',
-                                                          style: AppTypography
-                                                              .monoRef
-                                                              .copyWith(
-                                                            fontSize: 10,
-                                                            fontWeight:
-                                                                FontWeight.w700,
-                                                            color: AppColors
-                                                                .warning,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    if (overdue)
-                                                      Container(
-                                                        margin: const EdgeInsets
-                                                            .only(right: 5),
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .symmetric(
-                                                          horizontal: 5,
-                                                          vertical: 1,
-                                                        ),
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: AppColors
-                                                              .dangerTint,
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(
-                                                                      AppRadii
-                                                                          .sm),
-                                                        ),
-                                                        child: Text(
-                                                          'OVERDUE',
-                                                          style: AppTypography
-                                                              .monoRef
-                                                              .copyWith(
-                                                            fontSize: 10,
-                                                            fontWeight:
-                                                                FontWeight.w700,
-                                                            color: AppColors
-                                                                .danger,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    Expanded(
-                                                      child: Text(
-                                                        '${order.formattedDistanceAway} · ${order.deliveryDate}',
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                        style: AppTypography
-                                                            .monoRef
-                                                            .copyWith(
-                                                          fontSize: 11.5,
-                                                          color: AppColors
-                                                              .inkMuted,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: [
-                                              Text.rich(
-                                                PesoFormatter.buildPesoTextSpan(
-                                                  amount: order.totalAmount
-                                                      .replaceAll('₱', '')
-                                                      .trim(),
-                                                  fontSize: 15.5,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: AppColors.inkPrimary,
-                                                ),
-                                              ),
-                                              if (!isTodayMode)
-                                                GestureDetector(
-                                                  onTap: () =>
-                                                      _showMoveToDayDialog(
-                                                    context,
-                                                    order,
-                                                    activeDayIso,
-                                                  ),
-                                                  child: Container(
-                                                    margin:
-                                                        const EdgeInsets.only(
-                                                            top: 4),
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 2.5,
-                                                    ),
+                                                StoreImageWidget(
+                                                  imageUrl: order.storePhoto,
+                                                  custCode: order.custCode,
+                                                  width: 42,
+                                                  height: 42,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          AppRadii.sm),
+                                                  fallback: Container(
+                                                    width: 42,
+                                                    height: 42,
                                                     decoration: BoxDecoration(
                                                       color:
                                                           AppColors.primaryTint,
                                                       borderRadius:
                                                           BorderRadius.circular(
                                                               AppRadii.sm),
-                                                      border: Border.all(
-                                                        color: AppColors
-                                                            .primaryBorder,
-                                                      ),
                                                     ),
-                                                    child: Text(
-                                                      'Move Day',
-                                                      style: AppTypography
-                                                          .caption
-                                                          .copyWith(
-                                                        fontSize: 11.5,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                        color:
-                                                            AppColors.primary,
-                                                      ),
+                                                    child: const Icon(
+                                                      Icons.storefront_rounded,
+                                                      size: 19,
+                                                      color: AppColors.primary,
                                                     ),
                                                   ),
                                                 ),
-                                            ],
-                                          ),
-                                        ],
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Text(
+                                                        order.storeName,
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: AppTypography
+                                                            .label
+                                                            .copyWith(
+                                                          fontSize: 15.5,
+                                                          height: 1.2,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 3),
+                                                      Text(
+                                                        '${order.deliveryDate.trim().isNotEmpty ? HomeController.formatDateLabel(order.deliveryDate) : "Unscheduled"} · ${order.formattedDistanceAway}',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: AppTypography
+                                                            .monoRef
+                                                            .copyWith(
+                                                          fontSize: 12,
+                                                          color: AppColors
+                                                              .inkSecondary,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text.rich(
+                                                  PesoFormatter
+                                                      .buildPesoTextSpan(
+                                                    amount: order.totalAmount
+                                                        .replaceAll('₱', '')
+                                                        .trim(),
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: AppColors.inkPrimary,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Wrap(
+                                              alignment: WrapAlignment.end,
+                                              crossAxisAlignment:
+                                                  WrapCrossAlignment.center,
+                                              spacing: 8,
+                                              runSpacing: 6,
+                                              children: [
+                                                if (overdue)
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 4.5,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          AppColors.dangerTint,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              AppRadii.pill),
+                                                      border: Border.all(
+                                                        color: AppColors
+                                                            .dangerBorder,
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        const Icon(
+                                                          Icons
+                                                              .warning_amber_rounded,
+                                                          size: 14,
+                                                          color:
+                                                              AppColors.danger,
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 4),
+                                                        Text(
+                                                          delayDays > 0
+                                                              ? 'OVERDUE · ${delayDays}d late'
+                                                              : 'OVERDUE',
+                                                          style: AppTypography
+                                                              .monoRef
+                                                              .copyWith(
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            color: AppColors
+                                                                .danger,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                if (order.isLocked ||
+                                                    order.attemptCount > 0)
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 4.5,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color:
+                                                          AppColors.warningTint,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              AppRadii.pill),
+                                                      border: Border.all(
+                                                        color: AppColors
+                                                            .warningBorder,
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      '${order.attemptCount} ${order.attemptCount == 1 ? 'ATTEMPT' : 'ATTEMPTS'}',
+                                                      style: AppTypography
+                                                          .monoRef
+                                                          .copyWith(
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color:
+                                                            AppColors.warning,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                GestureDetector(
+                                                  onTap: () => controller
+                                                      .cycleDeliveryWindow(
+                                                          order),
+                                                  child: Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 4.5,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: order.effectiveDeliveryWindow ==
+                                                              'early'
+                                                          ? AppColors
+                                                              .warningTint
+                                                          : order.effectiveDeliveryWindow ==
+                                                                  'late'
+                                                              ? AppColors
+                                                                  .primaryTint
+                                                              : AppColors
+                                                                  .canvas,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              AppRadii.pill),
+                                                      border: Border.all(
+                                                        color: order.effectiveDeliveryWindow ==
+                                                                'early'
+                                                            ? AppColors
+                                                                .warningBorder
+                                                            : order.effectiveDeliveryWindow ==
+                                                                    'late'
+                                                                ? AppColors
+                                                                    .primaryBorder
+                                                                : AppColors
+                                                                    .border,
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Icon(
+                                                          order.effectiveDeliveryWindow ==
+                                                                  'late'
+                                                              ? Icons
+                                                                  .nights_stay_outlined
+                                                              : Icons
+                                                                  .schedule_rounded,
+                                                          size: 13.5,
+                                                          color: order.effectiveDeliveryWindow ==
+                                                                  'early'
+                                                              ? AppColors
+                                                                  .warning
+                                                              : order.effectiveDeliveryWindow ==
+                                                                      'late'
+                                                                  ? AppColors
+                                                                      .primary
+                                                                  : AppColors
+                                                                      .inkMuted,
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 5),
+                                                        Text(
+                                                          order.effectiveDeliveryWindow ==
+                                                                  'early'
+                                                              ? 'Early'
+                                                              : order.effectiveDeliveryWindow ==
+                                                                      'late'
+                                                                  ? 'Late'
+                                                                  : 'Normal',
+                                                          style: AppTypography
+                                                              .monoRef
+                                                              .copyWith(
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            color: order.effectiveDeliveryWindow ==
+                                                                    'early'
+                                                                ? AppColors
+                                                                    .warning
+                                                                : order.effectiveDeliveryWindow ==
+                                                                        'late'
+                                                                    ? AppColors
+                                                                        .primary
+                                                                    : AppColors
+                                                                        .inkMuted,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (!isTodayMode)
+                                                  GestureDetector(
+                                                    onTap: () =>
+                                                        _showMoveToDayDialog(
+                                                      context,
+                                                      order,
+                                                      activeDayIso,
+                                                    ),
+                                                    child: Container(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 4.5,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: AppColors
+                                                            .primaryTint,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(
+                                                                    AppRadii
+                                                                        .pill),
+                                                        border: Border.all(
+                                                          color: AppColors
+                                                              .primaryBorder,
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        'Move Day',
+                                                        style: AppTypography
+                                                            .monoRef
+                                                            .copyWith(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          color:
+                                                              AppColors.primary,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),

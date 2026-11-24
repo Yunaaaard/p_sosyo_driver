@@ -9,6 +9,8 @@ class OrderItem {
   final double totalAmount;
   final String uom;
   final String createdAt;
+  final String? adjustmentReason;
+  final int? originalQty;
 
   OrderItem({
     this.id,
@@ -21,7 +23,9 @@ class OrderItem {
     double? totalAmount,
     String? uom,
     String? createdAt,
-  })  : stockCode = stockCode ?? '',
+    this.adjustmentReason,
+    this.originalQty,
+  }) : stockCode = stockCode ?? '',
         category = (category != null && category.trim().isNotEmpty)
             ? category.trim()
             : 'BEVERAGE',
@@ -76,6 +80,32 @@ class OrderItem {
       totalAmount: (map['total_amount'] as num?)?.toDouble() ?? 0.0,
       uom: map['uom']?.toString() ?? 'PC',
       createdAt: map['created_at']?.toString() ?? '',
+      adjustmentReason: map['adjustment_reason']?.toString(),
+      originalQty: (map['original_qty'] as num?)?.toInt(),
+    );
+  }
+
+  int get numericQty => _parseQty(orderedQty);
+
+  OrderItem copyWith({
+    String? orderedQty,
+    double? totalAmount,
+    String? adjustmentReason,
+    int? originalQty,
+  }) {
+    return OrderItem(
+      id: id,
+      deliveryOrderId: deliveryOrderId,
+      stockCode: stockCode,
+      title: title,
+      category: category,
+      price: price,
+      orderedQty: orderedQty ?? this.orderedQty,
+      totalAmount: totalAmount ?? this.totalAmount,
+      uom: uom,
+      createdAt: createdAt,
+      adjustmentReason: adjustmentReason ?? this.adjustmentReason,
+      originalQty: originalQty ?? this.originalQty,
     );
   }
 
@@ -92,6 +122,8 @@ class OrderItem {
       'total_amount': totalAmount,
       'uom': uom,
       'created_at': createdAt,
+      if (adjustmentReason != null) 'adjustment_reason': adjustmentReason,
+      if (originalQty != null) 'original_qty': originalQty,
     };
   }
 }

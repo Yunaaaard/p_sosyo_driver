@@ -109,7 +109,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                   separatorBuilder: (_, __) =>
                       const SizedBox(height: AppSpacing.sm + 2),
                   itemBuilder: (context, index) =>
-                      _buildItemCard(controller.items[index], index + 1),
+                      _buildItemCard(context, controller.items[index], index + 1),
                 ),
               ),
           ],
@@ -606,7 +606,69 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
               ),
             ],
           ),
-          if (remarks.isNotEmpty) ...[
+            Row(
+              children: [
+                Text(
+                  'Payment:',
+                  style: AppTypography.caption.copyWith(
+                    fontSize: 13.5,
+                    color: AppColors.inkMuted,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Obx(() {
+                  final isQr = controller.paymentMethod.value == 'Digital/QR';
+                  return InkWell(
+                    onTap: controller.togglePaymentMethod,
+                    borderRadius: BorderRadius.circular(AppRadii.pill),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isQr
+                            ? AppColors.primaryTint
+                            : AppColors.successTint,
+                        borderRadius: BorderRadius.circular(AppRadii.pill),
+                        border: Border.all(
+                          color: isQr
+                              ? AppColors.primaryBorder
+                              : AppColors.successBorder,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isQr
+                                ? Icons.qr_code_2_rounded
+                                : Icons.payments_outlined,
+                            size: 14,
+                            color: isQr
+                                ? AppColors.primary
+                                : AppColors.success,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            controller.paymentMethod.value,
+                            style: AppTypography.monoRef.copyWith(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: isQr
+                                  ? AppColors.primary
+                                  : AppColors.success,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (remarks.isNotEmpty) ...[
             const SizedBox(height: 8),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1250,7 +1312,13 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
   }
 
   /// Rounded, padded item card for each ordered SKU.
-  Widget _buildItemCard(OrderItem item, int lineNumber) {
+  Widget _buildItemCard(BuildContext context, OrderItem item, int lineNumber) {
+    final canAdjust =
+        controller.orderStatus.value.trim() == 'Out for Delivery' &&
+            item.id != null;
+    final hasAdjustment =
+        item.adjustmentReason != null && item.adjustmentReason!.isNotEmpty;
+
     return SurfaceCard(
       padding: const EdgeInsets.all(AppSpacing.md + 2),
       borderRadius: AppRadii.lg,
@@ -1336,22 +1404,173 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                           color: AppColors.inkMuted,
                         ),
                       ),
+                    if (hasAdjustment)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.warningTint,
+                          borderRadius: BorderRadius.circular(AppRadii.pill),
+                        ),
+                        child: Text(
+                          '${item.adjustmentReason}',
+                          style: AppTypography.monoRef.copyWith(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.warning,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ],
             ),
           ),
           const SizedBox(width: AppSpacing.md),
-          Text.rich(
-            PesoFormatter.buildPesoTextSpan(
-              amount: item.formattedTotalAmount,
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              color: AppColors.inkPrimary,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text.rich(
+                PesoFormatter.buildPesoTextSpan(
+                  amount: item.formattedTotalAmount,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.inkPrimary,
+                ),
+              ),
+              if (canAdjust) ...[
+                const SizedBox(height: 6),
+                InkWell(
+                  onTap: () => _showAdjustItemDialog(context, item),
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryTint,
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                      border: Border.all(color: AppColors.primaryBorder),
+                    ),
+                    child: Text(
+                      'Adjust Qty',
+                      style: AppTypography.monoRef.copyWith(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  void _showAdjustItemDialog(BuildContext context, OrderItem item) {
+    final maxQty = item.originalQty ?? item.numericQty;
+    int draftQty = item.numericQty;
+    String selectedReason =
+        (item.adjustmentReason?.isNotEmpty == true) ? item.adjustmentReason! : 'Damaged';
+    const reasons = ['Damaged', 'Refused', 'Short-stock', 'Expired'];
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadii.xl)),
+      ),
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Partial Delivery Adjustment',
+                      style: AppTypography.title.copyWith(fontSize: 19),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.title,
+                      style: AppTypography.caption.copyWith(
+                        fontSize: 14,
+                        color: AppColors.inkSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          onPressed: draftQty > 0
+                              ? () => setSheetState(() => draftQty--)
+                              : null,
+                          icon: const Icon(Icons.remove_circle_outline),
+                          iconSize: 30,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          '$draftQty / $maxQty ${item.uom}',
+                          style: AppTypography.title.copyWith(fontSize: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          onPressed: draftQty < maxQty
+                              ? () => setSheetState(() => draftQty++)
+                              : null,
+                          icon: const Icon(Icons.add_circle_outline),
+                          iconSize: 30,
+                          color: AppColors.primary,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: reasons.map((r) {
+                        final selected = selectedReason == r;
+                        return ChoiceChip(
+                          label: Text(r),
+                          selected: selected,
+                          selectedColor: AppColors.warningTint,
+                          onSelected: (_) =>
+                              setSheetState(() => selectedReason = r),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    CustomButton(
+                      label: 'Apply Adjustment',
+                      icon: Icons.check_rounded,
+                      onPressed: () async {
+                        Navigator.of(sheetCtx).pop();
+                        await controller.adjustOrderItemQuantity(
+                          item: item,
+                          newQty: draftQty,
+                          reason: selectedReason,
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

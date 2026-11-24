@@ -49,7 +49,13 @@ class DatabaseService extends GetxService {
     await _ensureColumnExists('delivery_orders', 'scheduled_delivery_date', 'TEXT');
     await _ensureColumnExists('delivery_orders', 'locked_at', 'TEXT');
     await _ensureColumnExists('delivery_orders', 'route_sequence', 'INTEGER');
+    await _ensureColumnExists('delivery_orders', 'payment_method', "TEXT DEFAULT 'Cash'");
+    await _ensureColumnExists('delivery_orders', 'is_early_priority', 'INTEGER DEFAULT 0');
+    await _ensureColumnExists('delivery_orders', 'delivery_window', "TEXT DEFAULT 'normal'");
+    await _ensureColumnExists('delivery_orders', 'sync_status', "TEXT DEFAULT 'synced'");
     await _ensureColumnExists('order_items', 'category', 'TEXT');
+    await _ensureColumnExists('order_items', 'adjustment_reason', 'TEXT');
+    await _ensureColumnExists('order_items', 'original_qty', 'INTEGER');
     await _ensureColumnExists('receipts', 'customer_name', 'TEXT');
     await _ensureColumnExists('receipts', 'proof_of_delivery_path', 'TEXT');
 
@@ -156,7 +162,11 @@ class DatabaseService extends GetxService {
         is_locked INTEGER NOT NULL DEFAULT 0,
         scheduled_delivery_date TEXT,
         locked_at TEXT,
-        route_sequence INTEGER
+        route_sequence INTEGER,
+        payment_method TEXT NOT NULL DEFAULT 'Cash',
+        is_early_priority INTEGER NOT NULL DEFAULT 0,
+        delivery_window TEXT NOT NULL DEFAULT 'normal',
+        sync_status TEXT NOT NULL DEFAULT 'synced'
       )
     ''');
 
@@ -171,7 +181,9 @@ class DatabaseService extends GetxService {
         ordered_qty TEXT NOT NULL,
         total_amount REAL NOT NULL,
         uom TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        adjustment_reason TEXT,
+        original_qty INTEGER
       )
     ''');
 
@@ -451,12 +463,18 @@ class DatabaseService extends GetxService {
     String? proofOfDeliveryPath,
     String? cancellationReason,
   }) async {
-    final Map<String, Object?> updates = {'status': newStatus};
+    final Map<String, Object?> updates = {
+      'status': newStatus,
+      'sync_status': 'pending',
+    };
     if (deliveredAt != null) {
       updates['delivered_at'] = deliveredAt;
     }
     if (paymentReference != null) {
       updates['payment_reference'] = paymentReference;
+      if (paymentReference.trim().isNotEmpty) {
+        updates['payment_method'] = 'Digital/QR';
+      }
     }
     if (proofOfDeliveryPath != null) {
       updates['proof_of_delivery_path'] = proofOfDeliveryPath;
@@ -574,6 +592,7 @@ class DatabaseService extends GetxService {
       'attempt_count': attemptCount,
       'last_attempt_reason': lastAttemptReason,
       'last_attempt_at': lastAttemptAt,
+      'sync_status': 'pending',
     };
     if (isLocked != null) {
       updates['is_locked'] = isLocked ? 1 : 0;
@@ -665,6 +684,84 @@ class DatabaseService extends GetxService {
       );
     }
     await batch.commit(noResult: true);
+  }
+
+  Future<void> updateOrderPaymentMethod(
+    String orderId,
+    String paymentMethod,
+  ) async {
+    await _db.update(
+      'delivery_orders',
+      {'payment_method': paymentMethod},
+      where: 'id = ? OR transaction_id = ?',
+      whereArgs: [orderId, orderId],
+    );
+  }
+
+  Future<void> updateOrderDeliveryWindow(
+    String orderId,
+    String window,
+  ) async {
+    await _db.update(
+      'delivery_orders',
+      {
+        'delivery_window': window,
+        'is_early_priority': window == 'early' ? 1 : 0,
+      },
+      where: 'id = ? OR transaction_id = ?',
+      whereArgs: [orderId, orderId],
+    );
+  }
+
+  Future<void> updateOrderEarlyPriority(
+    String orderId,
+    bool isEarlyPriority,
+  ) async {
+    await _db.update(
+      'delivery_orders',
+      {'is_early_priority': isEarlyPriority ? 1 : 0},
+      where: 'id = ? OR transaction_id = ?',
+      whereArgs: [orderId, orderId],
+    );
+  }
+
+  Future<void> markAllPendingSynced() async {
+    await _db.update(
+      'delivery_orders',
+      {'sync_status': 'synced'},
+      where: "sync_status = 'pending'",
+    );
+  }
+
+  Future<void> updateOrderItemDeliveryAdjustment({
+    required int itemId,
+    required String orderId,
+    required int newQty,
+    required double newItemTotal,
+    required String reason,
+    required int originalQty,
+    required double newOrderTotal,
+  }) async {
+    await _db.update(
+      'order_items',
+      {
+        'ordered_qty': '$newQty',
+        'total_amount': newItemTotal,
+        'adjustment_reason': reason,
+        'original_qty': originalQty,
+      },
+      where: 'id = ?',
+      whereArgs: [itemId],
+    );
+    await _db.update(
+      'delivery_orders',
+      {
+        'total_amount': newOrderTotal,
+        'sync_status': 'pending',
+      },
+      where: 'id = ? OR transaction_id = ?',
+      whereArgs: [orderId, orderId],
+    );
   }
 
   @override

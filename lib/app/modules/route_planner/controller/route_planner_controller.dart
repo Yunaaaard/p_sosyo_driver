@@ -12,6 +12,7 @@ class RoutePlannerController extends GetxController {
   final RxString mode = 'today'.obs;
   final RxBool isLoading = true.obs;
   final RxBool includeSunday = false.obs;
+  final RxBool endNearDepot = false.obs;
   final RxInt selectedDayIndex = 0.obs;
 
   /// All Out-for-Delivery orders (including locked re-deliveries) for manual Insert Stop.
@@ -69,6 +70,15 @@ class RoutePlannerController extends GetxController {
     final raw = order.deliveryDate.trim();
     if (raw.length < 10) return false;
     return raw.substring(0, 10).compareTo(todayIso) < 0;
+  }
+
+  int overdueDays(DeliveryOrder order) {
+    final raw = order.deliveryDate.trim();
+    if (raw.length < 10) return 0;
+    final parsed = DateTime.tryParse(raw.substring(0, 10));
+    if (parsed == null) return 0;
+    final diff = todayPht.difference(parsed).inDays;
+    return diff > 0 ? diff : 0;
   }
 
   Future<void> _loadOrders() async {
@@ -129,9 +139,58 @@ class RoutePlannerController extends GetxController {
     weeklyDayBuckets.assignAll(updated);
   }
 
+  void toggleEndNearDepot(bool value) {
+    endNearDepot.value = value;
+  }
+
+  Future<void> cycleDeliveryWindow(DeliveryOrder order) async {
+    final String nextWindow;
+    switch (order.effectiveDeliveryWindow) {
+      case 'normal':
+        nextWindow = 'early';
+        break;
+      case 'early':
+        nextWindow = 'late';
+        break;
+      default:
+        nextWindow = 'normal';
+    }
+    await DatabaseService.to.updateOrderDeliveryWindow(order.id, nextWindow);
+
+    void updateList(RxList<DeliveryOrder> list) {
+      final idx = list.indexWhere((o) => o.id == order.id);
+      if (idx != -1) {
+        list[idx] = list[idx].copyWith(
+          deliveryWindow: nextWindow,
+          isEarlyPriority: nextWindow == 'early',
+        );
+        list.refresh();
+      }
+    }
+
+    updateList(allOutForDeliveryOrders);
+    updateList(allUnlockedOrders);
+    updateList(todayStops);
+
+    final updatedBuckets = Map<String, List<DeliveryOrder>>.from(weeklyDayBuckets);
+    for (final key in updatedBuckets.keys) {
+      updatedBuckets[key] = updatedBuckets[key]!
+          .map((o) => o.id == order.id
+              ? o.copyWith(
+                  deliveryWindow: nextWindow,
+                  isEarlyPriority: nextWindow == 'early',
+                )
+              : o)
+          .toList();
+    }
+    weeklyDayBuckets.assignAll(updatedBuckets);
+  }
+
   /// Auto-suggests the smartest delivery sequence for Today:
   /// - If Today is empty, pulls due/overdue unlocked stops (or all unlocked if none due).
-  /// - Prioritizes overdue stops + runs Nearest-Neighbor, 2-Opt, and Or-Opt polish.
+  /// - Sequences 3 time-window legs: Early -> Normal -> Late.
+  /// - Optionally ends near the depot/start location when [endNearDepot] is enabled.
+  /// - Runs Nearest-Neighbor, 2-Opt, and Or-Opt polish.
   Future<void> autoSuggestTodayOrder() async {
     if (todayStops.isEmpty) {
       final dueToday = allUnlockedOrders.where((o) {
@@ -146,35 +205,128 @@ class RoutePlannerController extends GetxController {
     if (todayStops.isEmpty) return;
 
     final driverCoords = await LocationHelper.getCurrentDriverLocation();
-    final summary = RoutePlanGenerator.generateWeeklyPlan(
-      orders: todayStops.toList(),
-      startLat: driverCoords.latitude,
-      startLng: driverCoords.longitude,
-      deliveryDays: [todayPht],
-    );
-    final seqMap = {
-      for (final a in summary.assignments) a.orderId: a.routeSequence,
-    };
-    final sorted = todayStops.toList()
-      ..sort((a, b) =>
-          (seqMap[a.id] ?? 999999).compareTo(seqMap[b.id] ?? 999999));
+    final earlyStops =
+        todayStops.where((o) => o.effectiveDeliveryWindow == 'early').toList();
+    final normalStops =
+        todayStops.where((o) => o.effectiveDeliveryWindow == 'normal').toList();
+    final lateStops =
+        todayStops.where((o) => o.effectiveDeliveryWindow == 'late').toList();
 
-    final polished = _polishRouteWithOrOpt(
-      sorted,
-      startLat: driverCoords.latitude,
-      startLng: driverCoords.longitude,
+    List<DeliveryOrder> sequenceSubset(
+      List<DeliveryOrder> subset,
+      double startLat,
+      double startLng,
+    ) {
+      if (subset.length <= 1) return subset;
+      final summary = RoutePlanGenerator.generateWeeklyPlan(
+        orders: subset,
+        startLat: startLat,
+        startLng: startLng,
+        deliveryDays: [todayPht],
+      );
+      final seqMap = {
+        for (final a in summary.assignments) a.orderId: a.routeSequence,
+      };
+      final sorted = subset.toList()
+        ..sort((a, b) =>
+            (seqMap[a.id] ?? 999999).compareTo(seqMap[b.id] ?? 999999));
+      return _polishRouteWithOrOpt(
+        sorted,
+        startLat: startLat,
+        startLng: startLng,
+      );
+    }
+
+    (double lat, double lng) tailCoords(
+      List<DeliveryOrder> leg,
+      double fallbackLat,
+      double fallbackLng,
+    ) {
+      if (leg.isNotEmpty &&
+          leg.last.latitude != null &&
+          leg.last.longitude != null) {
+        return (leg.last.latitude!, leg.last.longitude!);
+      }
+      return (fallbackLat, fallbackLng);
+    }
+
+    final sequencedEarly = sequenceSubset(
+      earlyStops,
+      driverCoords.latitude,
+      driverCoords.longitude,
     );
-    todayStops.assignAll(polished);
+    final leg2Start = tailCoords(
+      sequencedEarly,
+      driverCoords.latitude,
+      driverCoords.longitude,
+    );
+
+    var sequencedNormal = sequenceSubset(
+      normalStops,
+      leg2Start.$1,
+      leg2Start.$2,
+    );
+    final leg3Start = tailCoords(
+      sequencedNormal,
+      leg2Start.$1,
+      leg2Start.$2,
+    );
+
+    var sequencedLate = sequenceSubset(
+      lateStops,
+      leg3Start.$1,
+      leg3Start.$2,
+    );
+
+    if (endNearDepot.value) {
+      List<DeliveryOrder> anchorTail(
+        List<DeliveryOrder> leg,
+        double startLat,
+        double startLng,
+      ) {
+        if (leg.length < 2) return leg;
+        int closestIdx = leg.length - 1;
+        double minDepotDist = double.infinity;
+        for (int i = 0; i < leg.length; i++) {
+          final s = leg[i];
+          if (s.latitude != null && s.longitude != null) {
+            final d = LocationHelper.calculateDistanceKm(
+              startLat: driverCoords.latitude,
+              startLng: driverCoords.longitude,
+              endLat: s.latitude!,
+              endLng: s.longitude!,
+            );
+            if (d < minDepotDist) {
+              minDepotDist = d;
+              closestIdx = i;
+            }
+          }
+        }
+        final copy = List<DeliveryOrder>.from(leg);
+        final anchorLast = copy.removeAt(closestIdx);
+        return [...sequenceSubset(copy, startLat, startLng), anchorLast];
+      }
+
+      if (sequencedLate.length >= 2) {
+        sequencedLate = anchorTail(sequencedLate, leg3Start.$1, leg3Start.$2);
+      } else if (sequencedLate.isEmpty && sequencedNormal.length >= 2) {
+        sequencedNormal =
+            anchorTail(sequencedNormal, leg2Start.$1, leg2Start.$2);
+      }
+    }
+
+    final combined = [...sequencedEarly, ...sequencedNormal, ...sequencedLate];
+    todayStops.assignAll(combined);
 
     final totalKm = _estimateRouteKm(
-      polished,
+      combined,
       startLat: driverCoords.latitude,
       startLng: driverCoords.longitude,
     );
-    final overdueCount = polished.where(isOverdue).length;
+    final overdueCount = combined.where(isOverdue).length;
     Get.snackbar(
       'Smart Route Ready',
-      '${polished.length} stops sequenced · ${totalKm.toStringAsFixed(1)} km est.${overdueCount > 0 ? " ($overdueCount overdue)" : ""}',
+      '${combined.length} stops sequenced · ${totalKm.toStringAsFixed(1)} km est.${overdueCount > 0 ? " ($overdueCount overdue)" : ""}',
       snackPosition: SnackPosition.BOTTOM,
       backgroundColor: const Color(0xFFE8F5E9),
       colorText: const Color(0xFF15803D),

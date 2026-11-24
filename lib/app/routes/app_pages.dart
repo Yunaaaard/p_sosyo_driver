@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/modules/cash_remittance/bindings/cash_remittance_binding.dart';
+import 'package:p_sosyo_driver/app/modules/cash_remittance/views/cash_remittance_page.dart';
 import 'package:p_sosyo_driver/app/modules/end_of_day/bindings/end_of_day_binding.dart';
 import 'package:p_sosyo_driver/app/modules/end_of_day/views/end_of_day_page.dart';
 import 'package:p_sosyo_driver/app/modules/home/bindings/home_binding.dart';
@@ -19,6 +21,10 @@ import 'package:p_sosyo_driver/app/modules/route_calendar/bindings/route_calenda
 import 'package:p_sosyo_driver/app/modules/route_calendar/views/route_calendar_page.dart';
 import 'package:p_sosyo_driver/app/modules/route_planner/bindings/route_planner_binding.dart';
 import 'package:p_sosyo_driver/app/modules/route_planner/views/route_planner_page.dart';
+import 'package:p_sosyo_driver/app/modules/sync_queue/bindings/sync_queue_binding.dart';
+import 'package:p_sosyo_driver/app/modules/sync_queue/views/sync_queue_page.dart';
+import 'package:p_sosyo_driver/app/modules/van_loadout/bindings/van_loadout_binding.dart';
+import 'package:p_sosyo_driver/app/modules/van_loadout/views/van_loadout_page.dart';
 import 'app_routes.dart';
 
 class AppPages {
@@ -86,6 +92,21 @@ class AppPages {
       name: AppRoutes.routePlanner,
       page: () => const RoutePlannerPage(),
       binding: RoutePlannerBinding(),
+    ),
+    _smoothPage(
+      name: AppRoutes.vanLoadout,
+      page: () => const VanLoadoutPage(),
+      binding: VanLoadoutBinding(),
+    ),
+    _smoothPage(
+      name: AppRoutes.cashRemittance,
+      page: () => const CashRemittancePage(),
+      binding: CashRemittanceBinding(),
+    ),
+    _smoothPage(
+      name: AppRoutes.syncQueue,
+      page: () => const SyncQueuePage(),
+      binding: SyncQueueBinding(),
     ),
   ];
 }

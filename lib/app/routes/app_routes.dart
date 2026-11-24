@@ -10,4 +10,7 @@ class AppRoutes {
   static const String endOfDay = '/end-of-day';
   static const String routeCalendar = '/route-calendar';
   static const String routePlanner = '/route-planner';
+  static const String vanLoadout = '/van-loadout';
+  static const String cashRemittance = '/cash-remittance';
+  static const String syncQueue = '/sync-queue';
 }

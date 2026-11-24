@@ -120,72 +120,44 @@ class SwipeActionBackground extends StatelessWidget {
   }
 
   Widget _buildDeliveredContent(bool reached) {
-    return Column(
+    return Row(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isDeliveredCancelable) ...[
-              _SwipeActionPill(
-                icon: Icons.qr_code_2_rounded,
-                label: 'Cancel',
-                color: AppColors.danger,
-                highlighted: reached,
-              ),
-              const SizedBox(width: 8),
-            ],
-            _SwipeActionPill(
-              icon: Icons.print_rounded,
-              label: 'Reprint',
-              color: AppColors.primary,
-              highlighted: reached,
-            ),
-          ],
-        ),
-        const SizedBox(height: 5),
-        Text(
-          reached ? 'Release to choose action' : 'Swipe left for actions',
-          style: AppTypography.monoRef.copyWith(
-            fontSize: 10.5,
-            color: Colors.white60,
+        if (isDeliveredCancelable) ...[
+          _SwipeActionPill(
+            icon: Icons.qr_code_2_rounded,
+            label: 'Cancel',
+            color: AppColors.danger,
+            highlighted: reached,
           ),
+          const SizedBox(width: 8),
+        ],
+        _SwipeActionPill(
+          icon: Icons.print_rounded,
+          label: 'Reprint',
+          color: AppColors.primary,
+          highlighted: reached,
         ),
       ],
     );
   }
 
   Widget _buildActiveContent(bool reached) {
-    return Column(
+    return Row(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _SwipeActionPill(
-              icon: Icons.lock_clock_outlined,
-              label: 'Lock',
-              color: AppColors.warning,
-              highlighted: reached,
-            ),
-            const SizedBox(width: 8),
-            _SwipeActionPill(
-              icon: Icons.cancel_outlined,
-              label: 'Cancel',
-              color: AppColors.danger,
-              highlighted: reached,
-            ),
-          ],
+        _SwipeActionPill(
+          icon: Icons.lock_clock_outlined,
+          label: 'Lock',
+          color: AppColors.warning,
+          highlighted: reached,
         ),
-        const SizedBox(height: 5),
-        Text(
-          reached ? 'Release to choose action' : 'Swipe left to lock or cancel',
-          style: AppTypography.monoRef.copyWith(
-            fontSize: 10.5,
-            color: Colors.white60,
-          ),
+        const SizedBox(width: 8),
+        _SwipeActionPill(
+          icon: Icons.cancel_outlined,
+          label: 'Cancel',
+          color: AppColors.danger,
+          highlighted: reached,
         ),
       ],
     );
