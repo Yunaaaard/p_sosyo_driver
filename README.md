@@ -1,6 +1,6 @@
-# p_sosyo_driver
+# PAQNER DRIVER'S APP
 
-A new Flutter project.
+CREATED AT: JUNE 3, 2026
 
 ## Getting Started
 
