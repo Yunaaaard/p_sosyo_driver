@@ -7,6 +7,7 @@ import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/data/services/driver_sync_service.dart';
 import 'package:p_sosyo_driver/app/data/services/scanner_service.dart';
 import 'package:p_sosyo_driver/app/data/services/sms_service.dart';
+import 'package:p_sosyo_driver/app/data/services/transaction_services.dart';
 import 'app/routes/app_pages.dart';
 import 'app/routes/app_routes.dart';
 
@@ -25,6 +26,7 @@ void main() async {
   Get.put(DriverSyncService());
   Get.put(BluetoothPrinterService());
   Get.put(SmsService());
+  Get.put(TransactionServices());
 
   final initialRoute = await _resolveInitialRoute();
 

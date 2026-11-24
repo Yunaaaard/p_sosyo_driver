@@ -1,13 +1,17 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:p_sosyo_driver/app/core/constants/app_constants.dart';
 import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
 import 'package:p_sosyo_driver/app/data/models/delivery_attempt.dart';
 import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
 import 'package:p_sosyo_driver/app/data/models/driver.dart';
 import 'package:p_sosyo_driver/app/data/models/order_item.dart';
+import 'package:p_sosyo_driver/app/data/models/pending_transaction.dart';
 import 'package:p_sosyo_driver/app/data/models/receipt.dart';
 import 'package:p_sosyo_driver/app/data/providers/api_client.dart';
 import 'package:p_sosyo_driver/app/routes/app_routes.dart';
@@ -55,6 +59,7 @@ class DatabaseService extends GetxService {
     await _ensureColumnExists('delivery_orders', 'sync_status', "TEXT DEFAULT 'synced'");
     await _ensureColumnExists('order_items', 'category', 'TEXT');
     await _ensureColumnExists('order_items', 'adjustment_reason', 'TEXT');
+    await _ensureColumnExists('pending_transactions', 'transtat', 'INTEGER DEFAULT 2');
     await _ensureColumnExists('order_items', 'original_qty', 'INTEGER');
     await _ensureColumnExists('receipts', 'customer_name', 'TEXT');
     await _ensureColumnExists('receipts', 'proof_of_delivery_path', 'TEXT');
@@ -72,6 +77,23 @@ class DatabaseService extends GetxService {
       )
     ''');
     await _ensureColumnExists('delivery_attempts', 'rescheduled_date', 'TEXT');
+
+    await _db.execute('''
+      CREATE TABLE IF NOT EXISTS pending_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id TEXT NOT NULL,
+        store_name TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        amount TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        synced_at TEXT,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT
+      )
+    ''');
 
     // Backfill photos for known sandbox orders if missing
     try {
@@ -730,6 +752,178 @@ class DatabaseService extends GetxService {
       'delivery_orders',
       {'sync_status': 'synced'},
       where: "sync_status = 'pending'",
+    );
+  }
+
+  /// Checks whether the device currently has active internet connectivity.
+  ///
+  /// Uses a short TCP socket probe instead of DNS-only lookup so cached DNS
+  /// entries do not falsely report online right after turning off Wi-Fi.
+  Future<bool> hasInternetConnectivity() async {
+    try {
+      final socket = await Socket.connect(
+        '8.8.8.8',
+        53,
+        timeout: const Duration(seconds: 2),
+      );
+      socket.destroy();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Queues a [PendingTransaction] in SQLite when offline (or marks synced when online).
+  /// Returns `true` if queued offline as pending, `false` if already online.
+  Future<bool> queueOfflineTransactionIfDisconnected({
+    required String orderId,
+    required String storeName,
+    required String actionType,
+    required String amount,
+    required String summary,
+    Map<String, dynamic>? payload,
+  }) async {
+    final online = await hasInternetConnectivity();
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    if (!online) {
+      await _db.insert(
+        'pending_transactions',
+        PendingTransaction(
+          orderId: orderId,
+          storeName: storeName,
+          actionType: actionType,
+          amount: amount,
+          summary: summary,
+          payloadJson: jsonEncode(payload ?? <String, dynamic>{}),
+          status: 'pending',
+          transtat: TranStat.pending,
+          createdAt: nowIso,
+        ).toMap(),
+      );
+      await _db.update(
+        'delivery_orders',
+        {'sync_status': 'pending'},
+        where: 'id = ? OR transaction_id = ?',
+        whereArgs: [orderId, orderId],
+      );
+      logWarning(
+        'Offline detected: queued $actionType transaction for #$orderId ($storeName)',
+        tag: 'OFFLINE_QUEUE',
+      );
+      return true;
+    }
+
+    await _db.insert(
+      'pending_transactions',
+      PendingTransaction(
+        orderId: orderId,
+        storeName: storeName,
+        actionType: actionType,
+        amount: amount,
+        summary: summary,
+        payloadJson: jsonEncode(payload ?? <String, dynamic>{}),
+        status: 'synced',
+        transtat: TranStat.success,
+        createdAt: nowIso,
+        syncedAt: nowIso,
+      ).toMap(),
+    );
+    await _db.update(
+      'delivery_orders',
+      {'sync_status': 'synced'},
+      where: 'id = ? OR transaction_id = ?',
+      whereArgs: [orderId, orderId],
+    );
+    return false;
+  }
+
+  Future<int> insertTransaction(PendingTransaction txn) async {
+    return await _db.insert('pending_transactions', txn.toMap());
+  }
+
+  Future<List<PendingTransaction>> getAllTransactions() async {
+    final results = await _db.query(
+      'pending_transactions',
+      orderBy: 'id DESC',
+    );
+    return results.map((m) => PendingTransaction.fromMap(m)).toList();
+  }
+
+  Future<List<PendingTransaction>> getTransactionsByTranStat(int transtat) async {
+    final results = await _db.query(
+      'pending_transactions',
+      where: 'transtat = ?',
+      whereArgs: [transtat],
+      orderBy: 'id DESC',
+    );
+    return results.map((m) => PendingTransaction.fromMap(m)).toList();
+  }
+
+  Future<List<PendingTransaction>> getPendingTransactions() async {
+    final results = await _db.query(
+      'pending_transactions',
+      where: "transtat IN (?, ?) OR status IN ('pending', 'failed')",
+      whereArgs: [TranStat.pending, TranStat.failed],
+      orderBy: 'id DESC',
+    );
+    return results.map((m) => PendingTransaction.fromMap(m)).toList();
+  }
+
+  Future<int> getPendingTransactionCount() async {
+    final rows = await _db.rawQuery(
+      "SELECT COUNT(*) AS cnt FROM pending_transactions WHERE transtat IN (?, ?) OR status IN ('pending', 'failed')",
+      [TranStat.pending, TranStat.failed],
+    );
+    return (rows.first['cnt'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<void> updateTransactionStatus(
+    int id, {
+    required int transtat,
+    required String status,
+    String? lastError,
+    bool incrementRetry = false,
+  }) async {
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    if (incrementRetry) {
+      await _db.rawUpdate(
+        'UPDATE pending_transactions SET transtat = ?, status = ?, retry_count = retry_count + 1, last_error = ? WHERE id = ?',
+        [transtat, status, lastError, id],
+      );
+      return;
+    }
+    await _db.update(
+      'pending_transactions',
+      {
+        'transtat': transtat,
+        'status': status,
+        if (transtat == TranStat.success) 'synced_at': nowIso,
+        if (lastError != null) 'last_error': lastError,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> markAllPendingTransactionsSynced() async {
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    await _db.update(
+      'pending_transactions',
+      {
+        'status': 'synced',
+        'transtat': TranStat.success,
+        'synced_at': nowIso,
+      },
+      where: "transtat IN (?, ?) OR status IN ('pending', 'failed')",
+      whereArgs: [TranStat.pending, TranStat.failed],
+    );
+    await markAllPendingSynced();
+  }
+
+  Future<void> markPendingTransactionError(int id, String error) async {
+    await _db.rawUpdate(
+      'UPDATE pending_transactions SET retry_count = retry_count + 1, last_error = ?, transtat = ?, status = ? WHERE id = ?',
+      [error, TranStat.failed, 'failed', id],
     );
   }
 

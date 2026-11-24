@@ -269,7 +269,7 @@ class OrderDetailsPage extends GetView<OrderDetailsController> {
                                 Flexible(
                                   child: Text(
                                     order.formattedDistanceAway.isNotEmpty
-                                        ? '${order.formattedDistanceAway}  ·  Open Google Maps'
+                                        ? '${order.formattedDistanceAway}  ·  Navigate'
                                         : 'Open Google Maps Directions',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,

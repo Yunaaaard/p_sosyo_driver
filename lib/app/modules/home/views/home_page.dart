@@ -321,7 +321,7 @@ class HomePage extends GetView<HomeController> {
     return Obx(() {
       final alertCount = controller.ordersMissingPhone.length +
           controller.ordersPendingSmsWithPhone.length +
-          controller.orders.where((o) => o.syncStatus == 'pending').length;
+          controller.pendingOfflineCount.value;
 
       return Builder(
         builder: (btnContext) => Tooltip(

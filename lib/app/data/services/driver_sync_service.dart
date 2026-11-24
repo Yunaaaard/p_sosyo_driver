@@ -221,6 +221,12 @@ class DriverSyncService extends GetxService {
         // Map items
         double computedTotalAmount = 0.0;
         for (final rawItem in txnItems) {
+          if (computedTotalAmount == 0.0) {
+            logSync(
+              'Sample advance order item payload: ${rawItem.map((k, v) => MapEntry(k.toString(), v))}',
+              tag: 'SYNC_ITEM',
+            );
+          }
           final stockCode = rawItem['stockCode']?.toString() ?? '';
           final title = (rawItem['PRODUCTDESCRIPTION']?.toString() ??
                   rawItem['Description']?.toString() ??
@@ -234,15 +240,11 @@ class DriverSyncService extends GetxService {
                   '0') ??
               0.0;
           final qty = rawItem['quantity'] ??
-              rawItem['po'] ??
               rawItem['quantityOrdered'] ??
               rawItem['QUANTITY ORDERED IN PCS'] ??
               1;
-          final uom = (rawItem['PurchaseUom']?.toString() ??
-                  rawItem['uom']?.toString() ??
-                  rawItem['unit']?.toString() ??
-                  'PC')
-              .trim();
+          final uom = _resolveItemUom(rawItem);
+
           final category = (rawItem['mainCategory']?.toString() ??
                   rawItem['CATEGORY']?.toString() ??
                   rawItem['category']?.toString() ??
@@ -375,6 +377,30 @@ class DriverSyncService extends GetxService {
         message: 'Sync failed: $e',
       );
     }
+  }
+
+  static String _resolveItemUom(Map<dynamic, dynamic> rawItem) {
+    const uomKeys = [
+      'PurchaseUom',
+      'purchaseUom',
+      'PURCHASEUOM',
+      'UoM',
+      'UOM',
+      'uom',
+      'AlternateUom',
+      'alternateUom',
+      'StockUom',
+      'stockUom',
+      'unit',
+      'Unit',
+    ];
+    for (final key in uomKeys) {
+      final raw = rawItem[key]?.toString().trim() ?? '';
+      if (raw.isNotEmpty && raw.toLowerCase() != 'null') {
+        return raw.toUpperCase() == 'CASE' ? 'CS' : raw.toUpperCase();
+      }
+    }
+    return 'PC';
   }
 
   static double? _parseCoord(dynamic raw) {

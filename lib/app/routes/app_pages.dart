@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/modules/cash_remittance/bindings/cash_remittance_binding.dart';
 import 'package:p_sosyo_driver/app/modules/cash_remittance/views/cash_remittance_page.dart';
+import 'package:p_sosyo_driver/app/modules/delivery_map/bindings/delivery_map_binding.dart';
+import 'package:p_sosyo_driver/app/modules/delivery_map/views/delivery_map_page.dart';
 import 'package:p_sosyo_driver/app/modules/end_of_day/bindings/end_of_day_binding.dart';
 import 'package:p_sosyo_driver/app/modules/end_of_day/views/end_of_day_page.dart';
 import 'package:p_sosyo_driver/app/modules/home/bindings/home_binding.dart';
@@ -107,6 +109,11 @@ class AppPages {
       name: AppRoutes.syncQueue,
       page: () => const SyncQueuePage(),
       binding: SyncQueueBinding(),
+    ),
+    _smoothPage(
+      name: AppRoutes.deliveryMap,
+      page: () => const DeliveryMapPage(),
+      binding: DeliveryMapBinding(),
     ),
   ];
 }

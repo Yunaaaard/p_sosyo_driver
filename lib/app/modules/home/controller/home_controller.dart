@@ -10,6 +10,7 @@ import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/data/services/driver_sync_service.dart';
 import 'package:p_sosyo_driver/app/data/services/scanner_service.dart';
 import 'package:p_sosyo_driver/app/data/services/sms_service.dart';
+import 'package:p_sosyo_driver/app/data/services/transaction_services.dart';
 import 'package:p_sosyo_driver/app/routes/app_routes.dart';
 import 'package:p_sosyo_driver/app/widgets/route_plan_choice_dialog.dart';
 import 'package:p_sosyo_driver/app/widgets/sync_progress_dialog.dart';
@@ -35,6 +36,7 @@ class HomeController extends GetxController {
   final RxBool isSyncDialogMinimized = false.obs;
   final RxBool isMandatorySync = false.obs;
   final RxBool syncFailed = false.obs;
+  final RxInt pendingOfflineCount = 0.obs;
   final RxDouble syncProgress = 0.0.obs;
   final RxString syncStatusMessage = ''.obs;
 
@@ -177,6 +179,7 @@ class HomeController extends GetxController {
         _sortOrdersList(resolvedOrders);
         orders.assignAll(resolvedOrders);
         _recalculateTotals();
+        await refreshPendingOfflineCount();
         logImportant(
           'Loaded & sorted ${orders.length} deliveries by distance (${sortNearestFirst.value ? "Nearest → Farthest" : "Farthest → Nearest"})',
         );
@@ -248,6 +251,13 @@ class HomeController extends GetxController {
         duration: const Duration(seconds: 3),
       );
     }
+  }
+
+  Future<void> refreshPendingOfflineCount() async {
+    try {
+      pendingOfflineCount.value =
+          await DatabaseService.to.getPendingTransactionCount();
+    } catch (_) {}
   }
 
   void _recalculateTotals() {
@@ -361,6 +371,20 @@ class HomeController extends GetxController {
         paymentReference: cleanRef,
         proofOfDeliveryPath: cleanPod,
       );
+      await TransactionServices.to.recordTransaction(
+        orderId: existing.id,
+        storeName: existing.storeName,
+        actionType: 'DELIVERED',
+        amount: existing.totalAmount,
+        summary:
+            'Delivered${cleanRef != null && cleanRef.isNotEmpty ? " · Ref $cleanRef" : ""}',
+        payload: {
+          'deliveredAt': nowIso,
+          'paymentReference': cleanRef,
+          'proofOfDeliveryPath': cleanPod,
+        },
+      );
+      await refreshPendingOfflineCount();
       _recalculateTotals();
       logImportant(
         'Order #$orderId marked as DELIVERED! (1h cancel window started, Ref: ${cleanRef ?? "-"}, Sales: ₱${totalSales.value.toStringAsFixed(2)})',
@@ -450,6 +474,15 @@ class HomeController extends GetxController {
         'Cancelled',
         cancellationReason: cleanReason,
       );
+      await TransactionServices.to.recordTransaction(
+        orderId: existing.id,
+        storeName: existing.storeName,
+        actionType: 'CANCELLED',
+        amount: existing.totalAmount,
+        summary: 'Cancelled · ${cleanReason ?? "No reason"}',
+        payload: {'cancellationReason': cleanReason},
+      );
+      await refreshPendingOfflineCount();
       _recalculateTotals();
       logImportant(
         'Order #$orderId marked as CANCELLED! Reason: ${cleanReason ?? "N/A"}',
@@ -538,6 +571,21 @@ class HomeController extends GetxController {
       scheduledDeliveryDate: lockAndQueue ? scheduledDateIso : null,
       lockedAt: lockAndQueue ? nowIso : null,
     );
+    await TransactionServices.to.recordTransaction(
+      orderId: existing.id,
+      storeName: existing.storeName,
+      actionType: 'ATTEMPT',
+      amount: existing.totalAmount,
+      summary:
+          'Attempt #$nextAttempt · $combinedReason${lockAndQueue ? " (Locked)" : ""}',
+      payload: {
+        'attemptNumber': nextAttempt,
+        'reason': combinedReason,
+        'lockAndQueue': lockAndQueue,
+        'scheduledDateIso': scheduledDateIso,
+      },
+    );
+    await refreshPendingOfflineCount();
 
     orders[index] = existing.copyWith(
       attemptCount: nextAttempt,

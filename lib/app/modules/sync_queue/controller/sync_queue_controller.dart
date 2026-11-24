@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
-import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
-import 'package:p_sosyo_driver/app/data/services/database_service.dart';
-import 'package:p_sosyo_driver/app/data/services/driver_sync_service.dart';
+import 'package:p_sosyo_driver/app/data/models/pending_transaction.dart';
+import 'package:p_sosyo_driver/app/data/services/transaction_services.dart';
 import 'package:p_sosyo_driver/app/modules/home/controller/home_controller.dart';
 
 class SyncQueueController extends GetxController {
   final RxBool isLoading = true.obs;
   final RxBool isFlushing = false.obs;
-  final RxList<DeliveryOrder> pendingOrders = <DeliveryOrder>[].obs;
+  final RxList<PendingTransaction> pendingTransactions =
+      <PendingTransaction>[].obs;
 
   @override
   void onInit() {
@@ -20,13 +20,11 @@ class SyncQueueController extends GetxController {
   Future<void> loadPending() async {
     isLoading.value = true;
     try {
-      final all = await DatabaseService.to.getAllDeliveryOrders();
-      final pending = all
-          .where((o) => o.syncStatus == 'pending')
-          .toList()
-        ..sort((a, b) => (b.deliveredAt ?? b.lastAttemptAt ?? '')
-            .compareTo(a.deliveredAt ?? a.lastAttemptAt ?? ''));
-      pendingOrders.assignAll(pending);
+      await TransactionServices.to.refreshTransactions();
+      pendingTransactions.assignAll(TransactionServices.to.pendingTransactions);
+      if (Get.isRegistered<HomeController>()) {
+        await Get.find<HomeController>().refreshPendingOfflineCount();
+      }
     } catch (e, stack) {
       logError('Error loading offline sync queue', e, stack);
     } finally {
@@ -35,25 +33,18 @@ class SyncQueueController extends GetxController {
   }
 
   Future<void> flushQueueNow() async {
-    if (isFlushing.value || pendingOrders.isEmpty) return;
+    if (isFlushing.value || pendingTransactions.isEmpty) return;
     isFlushing.value = true;
-    logSync('Flushing ${pendingOrders.length} pending offline updates...');
     try {
-      final result = await DriverSyncService.to.syncAdvanceOrders();
+      final result = await TransactionServices.to.getPendings();
+      await loadPending();
       if (result.success) {
-        final flushedCount = pendingOrders.length;
-        await DatabaseService.to.markAllPendingSynced();
-        await loadPending();
         if (Get.isRegistered<HomeController>()) {
           await Get.find<HomeController>().loadOrdersFromDb();
         }
-        logImportant(
-          'Offline sync queue flushed: $flushedCount record(s) marked synced',
-          tag: 'SYNC_QUEUE',
-        );
         Get.snackbar(
           'Sync Complete',
-          '$flushedCount pending update(s) synced with dispatch.',
+          result.message,
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: const Color(0xFFE8F5E9),
           colorText: const Color(0xFF15803D),
@@ -61,9 +52,9 @@ class SyncQueueController extends GetxController {
           borderRadius: 12,
         );
       } else {
-        logWarning('Offline queue flush paused: ${result.message}');
+        final isOffline = result.message.contains('No internet connection');
         Get.snackbar(
-          'Offline Notice',
+          isOffline ? 'Still Offline' : 'Sync Notice',
           result.message,
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: const Color(0xFFFFF3CD),

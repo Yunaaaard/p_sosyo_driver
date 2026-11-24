@@ -13,4 +13,5 @@ class AppRoutes {
   static const String vanLoadout = '/van-loadout';
   static const String cashRemittance = '/cash-remittance';
   static const String syncQueue = '/sync-queue';
+  static const String deliveryMap = '/delivery-map';
 }

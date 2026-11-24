@@ -30,3 +30,29 @@ class AppConstants {
   // Durations
   static const Duration adminHoldDuration = Duration(milliseconds: 1500);
 }
+
+/// Global transaction status constants (`transtat`).
+///
+/// Matches the Ravamate / SFAplus transaction status convention:
+/// - `0` = success
+/// - `1` = failed
+/// - `2` = pending
+class TranStat {
+  TranStat._();
+
+  static const int success = 0;
+  static const int failed = 1;
+  static const int pending = 2;
+
+  static String label(int status) {
+    switch (status) {
+      case success:
+        return 'Success';
+      case failed:
+        return 'Failed';
+      case pending:
+      default:
+        return 'Pending';
+    }
+  }
+}

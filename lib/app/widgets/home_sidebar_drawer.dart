@@ -109,9 +109,7 @@ class HomeSidebarDrawer extends StatelessWidget {
             child: Obx(() {
               final smsAlerts = controller.ordersMissingPhone.length +
                   controller.ordersPendingSmsWithPhone.length;
-              final pendingSync = controller.orders
-                  .where((o) => o.syncStatus == 'pending')
-                  .length;
+              final pendingSync = controller.pendingOfflineCount.value;
 
               return ListView(
                 padding: const EdgeInsets.symmetric(
@@ -140,6 +138,15 @@ class HomeSidebarDrawer extends StatelessWidget {
                     onTap: () {
                       Navigator.of(context).pop();
                       Get.toNamed(AppRoutes.vanLoadout);
+                    },
+                  ),
+                  _DrawerMenuTile(
+                    icon: Icons.map_outlined,
+                    title: 'Delivery Route Map',
+                    subtitle: 'Live OSM pins, road routing & date filter',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Get.toNamed(AppRoutes.deliveryMap);
                     },
                   ),
                   _DrawerMenuTile(

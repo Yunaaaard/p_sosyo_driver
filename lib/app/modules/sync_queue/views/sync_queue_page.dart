@@ -26,12 +26,12 @@ class SyncQueuePage extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (controller.pendingOrders.isEmpty) {
+        if (controller.pendingTransactions.isEmpty) {
           return const EmptyStateView(
             icon: Icons.cloud_done_outlined,
-            title: 'All Updates Synced',
+            title: 'All Transactions Synced',
             subtitle:
-                'Every delivery, cancellation, and attempt record is up to date.',
+                'Every delivery, cancellation, attempt, and SKU adjustment is synced.',
           );
         }
 
@@ -62,7 +62,7 @@ class SyncQueuePage extends StatelessWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        '${controller.pendingOrders.length} local update(s) queued for dispatch upload',
+                        '${controller.pendingTransactions.length} offline transaction(s) queued for upload',
                         style: AppTypography.label.copyWith(
                           fontSize: 13.5,
                           color: AppColors.warning,
@@ -76,51 +76,86 @@ class SyncQueuePage extends StatelessWidget {
             Expanded(
               child: ListView.separated(
                 padding: const EdgeInsets.all(AppSpacing.lg),
-                itemCount: controller.pendingOrders.length,
+                itemCount: controller.pendingTransactions.length,
                 separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
                 itemBuilder: (_, index) {
-                  final o = controller.pendingOrders[index];
+                  final txn = controller.pendingTransactions[index];
+                  final (Color pillBg, Color pillFg) = switch (txn.actionType) {
+                    'DELIVERED' => (AppColors.successTint, AppColors.success),
+                    'CANCELLED' => (AppColors.dangerTint, AppColors.danger),
+                    'ATTEMPT' => (AppColors.warningTint, AppColors.warning),
+                    _ => (AppColors.primaryTint, AppColors.primary),
+                  };
+
                   return SurfaceCard(
                     padding: const EdgeInsets.all(AppSpacing.md),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                o.storeName,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                txn.storeName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: AppTypography.label.copyWith(fontSize: 15),
+                                style:
+                                    AppTypography.label.copyWith(fontSize: 15),
                               ),
-                              Text(
-                                'Ref #${o.id} · ${o.status.value}${o.isLocked ? " (Locked)" : ""} · ${o.totalAmount}',
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: pillBg,
+                                borderRadius:
+                                    BorderRadius.circular(AppRadii.pill),
+                              ),
+                              child: Text(
+                                txn.actionType,
                                 style: AppTypography.monoRef.copyWith(
-                                  fontSize: 12,
-                                  color: AppColors.inkSecondary,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: pillFg,
                                 ),
                               ),
-                            ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Ref #${txn.orderId} · ${txn.summary}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.caption.copyWith(
+                            fontSize: 12.5,
+                            color: AppColors.inkSecondary,
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.warningTint,
-                            borderRadius: BorderRadius.circular(AppRadii.pill),
-                          ),
-                          child: Text(
-                            'PENDING',
-                            style: AppTypography.monoRef.copyWith(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.warning,
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              txn.amount,
+                              style: AppTypography.monoRef.copyWith(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.inkPrimary,
+                              ),
                             ),
-                          ),
+                            Text(
+                              txn.retryCount > 0
+                                  ? 'Retries: ${txn.retryCount}'
+                                  : 'Queued offline',
+                              style: AppTypography.monoRef.copyWith(
+                                fontSize: 11,
+                                color: AppColors.inkMuted,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

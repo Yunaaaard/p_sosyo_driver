@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
 import 'package:p_sosyo_driver/app/core/utils/location_helper.dart';
 import 'package:p_sosyo_driver/app/core/utils/route_plan_generator.dart';
@@ -431,16 +434,134 @@ class RoutePlannerController extends GetxController {
             startLng: driverCoords.longitude,
           ),
     );
-    Get.snackbar(
-      'Smart Weekly Plan Ready',
-      '${summary.assignments.length} stops balanced across ${days.length} days · ${weeklyKm.toStringAsFixed(1)} km est.',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: const Color(0xFFE8F5E9),
-      colorText: const Color(0xFF15803D),
-      margin: const EdgeInsets.all(16),
-      borderRadius: 12,
-      duration: const Duration(seconds: 2),
+    _showSmartWeeklyPlanReadyDialog(
+      stopCount: summary.assignments.length,
+      dayCount: days.length,
+      weeklyKm: weeklyKm,
     );
+  }
+
+  void _showSmartWeeklyPlanReadyDialog({
+    required int stopCount,
+    required int dayCount,
+    required double weeklyKm,
+  }) {
+    final autoCloseTimer = Timer(const Duration(seconds: 3), () {
+      if (Get.isDialogOpen == true) {
+        Get.back();
+      }
+    });
+
+    Get.dialog(
+      Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 380),
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(AppRadii.xl),
+            border: Border.all(color: AppColors.successBorder),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x260F172A),
+                blurRadius: 24,
+                offset: Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.successTint,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.auto_awesome_rounded,
+                      color: AppColors.success,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Smart Weekly Plan Ready',
+                      style: AppTypography.title.copyWith(fontSize: 16.5),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      autoCloseTimer.cancel();
+                      if (Get.isDialogOpen == true) Get.back();
+                    },
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppColors.inkMuted,
+                      size: 20,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.successTint,
+                  borderRadius: BorderRadius.circular(AppRadii.md),
+                  border: Border.all(color: AppColors.successBorder),
+                ),
+                child: Text(
+                  '$stopCount stops balanced across $dayCount days · ${weeklyKm.toStringAsFixed(1)} km est.',
+                  style: AppTypography.label.copyWith(
+                    fontSize: 13.5,
+                    color: AppColors.success,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Closes automatically in 3s',
+                      style: AppTypography.caption.copyWith(fontSize: 12),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      autoCloseTimer.cancel();
+                      if (Get.isDialogOpen == true) Get.back();
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                    ),
+                    child: const Text(
+                      'Got it',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      barrierDismissible: true,
+    ).whenComplete(autoCloseTimer.cancel);
   }
 
   void reorderTodayStops(int oldIndex, int newIndex) {

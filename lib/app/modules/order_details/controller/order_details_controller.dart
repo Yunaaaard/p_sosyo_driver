@@ -9,6 +9,7 @@ import 'package:p_sosyo_driver/app/data/models/order_item.dart';
 import 'package:p_sosyo_driver/app/data/providers/api_client.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/data/services/sms_service.dart';
+import 'package:p_sosyo_driver/app/data/services/transaction_services.dart';
 import 'package:p_sosyo_driver/app/modules/home/controller/home_controller.dart';
 
 class OrderDetailsController extends GetxController {
@@ -104,6 +105,20 @@ class OrderDetailsController extends GetxController {
       reason: reason,
       originalQty: origQty,
       newOrderTotal: newOrderTotal,
+    );
+    await TransactionServices.to.recordTransaction(
+      orderId: targetId,
+      storeName: storeName,
+      actionType: 'SKU_ADJUSTED',
+      amount: '₱ ${newOrderTotal.toStringAsFixed(2)}',
+      summary: '${item.title}: $origQty → $clampedQty ($reason)',
+      payload: {
+        'itemId': itemId,
+        'newQty': clampedQty,
+        'originalQty': origQty,
+        'reason': reason,
+        'newOrderTotal': newOrderTotal,
+      },
     );
     if (Get.isRegistered<HomeController>()) {
       await Get.find<HomeController>().loadOrdersFromDb();
