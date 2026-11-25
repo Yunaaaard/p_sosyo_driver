@@ -14,7 +14,18 @@ import 'app/routes/app_routes.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark,
+      systemNavigationBarContrastEnforced: false,
+    ),
+  );
 
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -30,16 +41,7 @@ void main() async {
   Get.put(S3ImageService());
   Get.put(TransactionServices());
 
-  final initialRoute = await _resolveInitialRoute();
-
-  runApp(MyApp(initialRoute: initialRoute));
-}
-
-Future<String> _resolveInitialRoute() async {
-  final authenticatedDriver = await DatabaseService.to.getAuthenticatedDriver();
-  return authenticatedDriver != null
-      ? AppRoutes.pinVerification
-      : AppRoutes.login;
+  runApp(const MyApp(initialRoute: AppRoutes.landing));
 }
 
 class MyApp extends StatelessWidget {

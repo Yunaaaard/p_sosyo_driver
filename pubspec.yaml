@@ -29,6 +29,7 @@ dependencies:
   esc_pos_utils_plus: ^2.0.4
   flutter_image_compress: ^2.4.0
   flutter_compass: ^0.8.1
+  video_player: ^2.9.2
 
 dev_dependencies:
   flutter_test:
@@ -42,6 +43,7 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - assets/videos/
 
   fonts:
     - family: Poppins

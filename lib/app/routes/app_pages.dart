@@ -8,6 +8,8 @@ import 'package:p_sosyo_driver/app/modules/end_of_day/bindings/end_of_day_bindin
 import 'package:p_sosyo_driver/app/modules/end_of_day/views/end_of_day_page.dart';
 import 'package:p_sosyo_driver/app/modules/home/bindings/home_binding.dart';
 import 'package:p_sosyo_driver/app/modules/home/views/home_page.dart';
+import 'package:p_sosyo_driver/app/modules/landing/bindings/landing_binding.dart';
+import 'package:p_sosyo_driver/app/modules/landing/views/landing_page.dart';
 import 'package:p_sosyo_driver/app/modules/login/bindings/login_binding.dart';
 import 'package:p_sosyo_driver/app/modules/login/views/login_page.dart';
 import 'package:p_sosyo_driver/app/modules/otp_verification/bindings/pin_verification_binding.dart';
@@ -46,6 +48,11 @@ class AppPages {
   }
 
   static final pages = [
+    _smoothPage(
+      name: AppRoutes.landing,
+      page: () => const LandingPage(),
+      binding: LandingBinding(),
+    ),
     _smoothPage(
       name: AppRoutes.login,
       page: () => const LoginPage(),
