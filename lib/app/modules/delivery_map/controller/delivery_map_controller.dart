@@ -81,7 +81,7 @@ class DeliveryMapController extends GetxController {
       (_) => refreshDriverGps(recalculateRoute: false),
     );
     _trafficRefreshTicker = Timer.periodic(
-      const Duration(seconds: 30),
+      const Duration(seconds: 90),
       (_) {
         if (CartoConfig.hasTomTomTrafficKey && showTrafficOverlay.value) {
           trafficRefreshTick.value++;
