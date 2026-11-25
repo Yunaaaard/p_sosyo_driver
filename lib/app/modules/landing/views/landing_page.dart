@@ -10,32 +10,28 @@ class LandingPage extends GetView<LandingController> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: controller.skipToNext,
-        child: Obx(() {
-          if (!controller.isVideoReady.value) {
-            return const SizedBox.expand();
-          }
-          final size = controller.videoController.value.size;
-          return SafeArea(
-            child: Center(
-              child: FractionallySizedBox(
-                widthFactor: 0.84,
-                heightFactor: 0.84,
-                child: FittedBox(
-                  fit: BoxFit.contain,
-                  child: SizedBox(
-                    width: size.width,
-                    height: size.height,
-                    child: VideoPlayer(controller.videoController),
-                  ),
+      body: Obx(() {
+        if (!controller.isVideoReady.value) {
+          return const SizedBox.expand();
+        }
+        final size = controller.videoController.value.size;
+        return SafeArea(
+          child: Center(
+            child: FractionallySizedBox(
+              widthFactor: 0.84,
+              heightFactor: 0.84,
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: SizedBox(
+                  width: size.width,
+                  height: size.height,
+                  child: VideoPlayer(controller.videoController),
                 ),
               ),
             ),
-          );
-        }),
-      ),
+          ),
+        );
+      }),
     );
   }
 }

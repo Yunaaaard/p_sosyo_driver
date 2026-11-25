@@ -222,6 +222,9 @@ class DeliverySummaryPage extends StatelessWidget {
                                   File(podPath),
                                   height: 170,
                                   width: double.infinity,
+                                  cacheWidth: (MediaQuery.sizeOf(context).width *
+                                          MediaQuery.devicePixelRatioOf(context))
+                                      .round(),
                                   fit: BoxFit.cover,
                                 ),
                               ),

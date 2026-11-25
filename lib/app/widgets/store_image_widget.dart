@@ -83,6 +83,10 @@ class _StoreImageWidgetState extends State<StoreImageWidget> {
 
     final currentUrl = _candidates[_currentCandidateIndex];
 
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final cacheW = (widget.width * dpr).round();
+    final cacheH = (widget.height * dpr).round();
+
     Widget imageWidget = Container(
       width: widget.width,
       height: widget.height,
@@ -96,6 +100,8 @@ class _StoreImageWidgetState extends State<StoreImageWidget> {
           currentUrl,
           width: widget.width,
           height: widget.height,
+          cacheWidth: cacheW > 0 ? cacheW : null,
+          cacheHeight: cacheH > 0 ? cacheH : null,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
             WidgetsBinding.instance.addPostFrameCallback((_) {

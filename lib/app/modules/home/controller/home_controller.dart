@@ -29,6 +29,12 @@ class HomeController extends GetxController {
   final Rx<DateTime> currentTime = DateTime.now().toUtc().obs;
   Timer? _cancelWindowTicker;
   Timer? _liveLocationTicker;
+  final DateTime _homeMountedAt = DateTime.now();
+
+  /// Prevents rapid trailing taps from PIN unlock (e.g. a 7th tap on `0`)
+  /// from bleeding through to the Home bottom bar during transition.
+  bool get isPostUnlockTouchGuardActive =>
+      DateTime.now().difference(_homeMountedAt).inMilliseconds < 500;
 
   // Syncing states
   final RxBool isSyncing = false.obs;
@@ -39,12 +45,16 @@ class HomeController extends GetxController {
   final RxInt pendingOfflineCount = 0.obs;
   final RxDouble syncProgress = 0.0.obs;
   final RxString syncStatusMessage = ''.obs;
+  final RxMap<String, String> liveDistanceLabels = <String, String>{}.obs;
 
   @override
   void onInit() {
     super.onInit();
     _cancelWindowTicker = Timer.periodic(const Duration(seconds: 1), (_) {
-      currentTime.value = DateTime.now().toUtc();
+      final now = DateTime.now().toUtc();
+      if (orders.any((o) => o.canCancelDelivered(now))) {
+        currentTime.value = now;
+      }
     });
     LocationHelper.startLocationUpdates();
     _liveLocationTicker = Timer.periodic(const Duration(seconds: 3), (_) {
@@ -75,15 +85,18 @@ class HomeController extends GetxController {
       if (movedKm < 0.005) return; // Ignore < 5m GPS jitter
       driverLatitude.value = coords.latitude;
       driverLongitude.value = coords.longitude;
-      final updated = orders
-          .map(
-            (o) => o.withResolvedLocation(
-              driverLat: coords.latitude,
-              driverLng: coords.longitude,
-            ),
-          )
-          .toList();
-      orders.assignAll(updated);
+      final nextLabels = <String, String>{};
+      for (final o in orders) {
+        final resolved = o.withResolvedLocation(
+          driverLat: coords.latitude,
+          driverLng: coords.longitude,
+        );
+        final label = resolved.formattedDistanceAway;
+        if (label.isNotEmpty) {
+          nextLabels[o.id] = label;
+        }
+      }
+      liveDistanceLabels.assignAll(nextLabels);
     } catch (_) {}
   }
 

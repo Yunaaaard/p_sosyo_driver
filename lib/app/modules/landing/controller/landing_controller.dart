@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
-import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/routes/app_routes.dart';
 import 'package:video_player/video_player.dart';
 
@@ -55,17 +54,7 @@ class LandingController extends GetxController {
     _hasNavigated = true;
     _fallbackTimer?.cancel();
 
-    try {
-      final authenticatedDriver =
-          await DatabaseService.to.getAuthenticatedDriver();
-      final nextRoute = authenticatedDriver != null
-          ? AppRoutes.pinVerification
-          : AppRoutes.login;
-      Get.offAllNamed(nextRoute);
-    } catch (e, stack) {
-      logError('Error resolving post-landing route', e, stack);
-      Get.offAllNamed(AppRoutes.login);
-    }
+    Get.offAllNamed(AppRoutes.home);
   }
 
   @override

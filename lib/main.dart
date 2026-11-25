@@ -41,7 +41,15 @@ void main() async {
   Get.put(S3ImageService());
   Get.put(TransactionServices());
 
-  runApp(const MyApp(initialRoute: AppRoutes.landing));
+  final initialRoute = await _resolveInitialRoute();
+  runApp(MyApp(initialRoute: initialRoute));
+}
+
+Future<String> _resolveInitialRoute() async {
+  final authenticatedDriver = await DatabaseService.to.getAuthenticatedDriver();
+  return authenticatedDriver != null
+      ? AppRoutes.pinVerification
+      : AppRoutes.login;
 }
 
 class MyApp extends StatelessWidget {

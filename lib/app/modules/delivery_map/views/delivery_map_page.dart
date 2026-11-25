@@ -165,7 +165,6 @@ class DeliveryMapPage extends StatelessWidget {
                     final orders = controller.filteredOrders;
                     final selected = controller.selectedOrder.value;
                     final driverPos = controller.driverLatLng.value;
-                    final headingRad = controller.driverHeadingRad.value;
                     return MarkerLayer(
                       rotate: false,
                       markers: [
@@ -176,47 +175,52 @@ class DeliveryMapPage extends StatelessWidget {
                           width: 104,
                           height: 104,
                           child: RepaintBoundary(
-                            child: Transform.rotate(
-                              angle: headingRad,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  const SizedBox(
-                                    width: 104,
-                                    height: 104,
-                                    child: CustomPaint(
-                                      painter: _HeadingGlowConePainter(),
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 50,
-                                    height: 50,
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: controller.isFollowMode.value
-                                            ? AppColors.primary
-                                            : AppColors.surfaceDark,
-                                        width: 2.5,
+                            child: Obx(() {
+                              final headingRad =
+                                  controller.driverHeadingRad.value;
+                              final isFollow = controller.isFollowMode.value;
+                              return Transform.rotate(
+                                angle: headingRad,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    const SizedBox(
+                                      width: 104,
+                                      height: 104,
+                                      child: CustomPaint(
+                                        painter: _HeadingGlowConePainter(),
                                       ),
-                                      boxShadow: const [
-                                        BoxShadow(
-                                          color: Color(0x590E1B4D),
-                                          blurRadius: 8,
-                                          offset: Offset(0, 3),
+                                    ),
+                                    Container(
+                                      width: 50,
+                                      height: 50,
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: isFollow
+                                              ? AppColors.primary
+                                              : AppColors.surfaceDark,
+                                          width: 2.5,
                                         ),
-                                      ],
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Color(0x590E1B4D),
+                                            blurRadius: 8,
+                                            offset: Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: SvgPicture.asset(
+                                        AppConstants.truck3dAsset,
+                                        fit: BoxFit.contain,
+                                      ),
                                     ),
-                                    child: SvgPicture.asset(
-                                      AppConstants.truck3dAsset,
-                                      fit: BoxFit.contain,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                                  ],
+                                ),
+                              );
+                            }),
                           ),
                         ),
                       ],

@@ -285,17 +285,22 @@ class PinVerificationPage extends GetView<PinVerificationController> {
         borderRadius: BorderRadius.circular(AppRadii.xl),
         border: Border.all(color: AppColors.border),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildKeypadRow(['1', '2', '3']),
-          const SizedBox(height: AppSpacing.sm),
-          _buildKeypadRow(['4', '5', '6']),
-          const SizedBox(height: AppSpacing.sm),
-          _buildKeypadRow(['7', '8', '9']),
-          const SizedBox(height: AppSpacing.sm),
-          _buildBottomKeypadRow(),
-        ],
+      child: Obx(
+        () => AbsorbPointer(
+          absorbing: controller.isSaving.value || controller.isInputLocked.value,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildKeypadRow(['1', '2', '3']),
+              const SizedBox(height: AppSpacing.sm),
+              _buildKeypadRow(['4', '5', '6']),
+              const SizedBox(height: AppSpacing.sm),
+              _buildKeypadRow(['7', '8', '9']),
+              const SizedBox(height: AppSpacing.sm),
+              _buildBottomKeypadRow(),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -311,6 +311,9 @@ class ReceiptDetailsPage extends GetView<ReceiptDetailsController> {
                                   File(podPath),
                                   height: 160,
                                   width: double.infinity,
+                                  cacheWidth: (MediaQuery.sizeOf(context).width *
+                                          MediaQuery.devicePixelRatioOf(context))
+                                      .round(),
                                   fit: BoxFit.cover,
                                 ),
                               ),

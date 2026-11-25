@@ -11,6 +11,7 @@ class PinVerificationController extends GetxController {
   final RxString confirmPin = "".obs;
   final RxBool isConfirming = false.obs;
   final RxBool isSaving = false.obs;
+  final RxBool isInputLocked = false.obs;
   final RxBool isVerifyMode = false.obs;
   static const int pinLength = 6;
 
@@ -48,12 +49,13 @@ class PinVerificationController extends GetxController {
 
   /// Appends a digit to pin (Step 1 / Verify) or confirmPin (Step 2)
   void addDigit(String digit) {
-    if (isSaving.value) return;
+    if (isSaving.value || isInputLocked.value) return;
 
     if (isVerifyMode.value) {
       if (pin.value.length < pinLength) {
         pin.value += digit;
         if (pin.value.length == pinLength) {
+          isInputLocked.value = true;
           Future.delayed(const Duration(milliseconds: 150), verifyExistingPin);
         }
       }
@@ -63,14 +65,17 @@ class PinVerificationController extends GetxController {
     if (!isConfirming.value && pin.value.length < pinLength) {
       pin.value += digit;
       if (pin.value.length == pinLength) {
+        isInputLocked.value = true;
         // First 6 digits entered -> smoothly transition to confirm mode
         Future.delayed(const Duration(milliseconds: 180), () {
           isConfirming.value = true;
+          isInputLocked.value = false;
         });
       }
     } else if (isConfirming.value && confirmPin.value.length < pinLength) {
       confirmPin.value += digit;
       if (confirmPin.value.length == pinLength) {
+        isInputLocked.value = true;
         // Confirmation 6 digits entered -> automatically validate
         Future.delayed(const Duration(milliseconds: 180), submitPin);
       }
@@ -87,9 +92,10 @@ class PinVerificationController extends GetxController {
       if (driver != null && pin.value == driver.pin.trim()) {
         logImportant('Driver ${driver.username} unlocked session via passcode');
         pin.value = '';
-        Get.offAllNamed(AppRoutes.home);
+        Get.offAllNamed(AppRoutes.landing);
       } else {
         pin.value = '';
+        isInputLocked.value = false;
         Get.snackbar(
           'Incorrect Passcode',
           'The passcode you entered is incorrect. Please try again.',
@@ -102,6 +108,7 @@ class PinVerificationController extends GetxController {
         );
       }
     } catch (e, stack) {
+      isInputLocked.value = false;
       logError('Passcode verification error', e, stack);
     } finally {
       isSaving.value = false;
@@ -167,6 +174,7 @@ class PinVerificationController extends GetxController {
         duration: const Duration(seconds: 2),
       );
       reset();
+      isInputLocked.value = false;
       return;
     }
 
@@ -202,7 +210,7 @@ class PinVerificationController extends GetxController {
       );
 
       reset();
-      Get.offAllNamed(AppRoutes.home);
+      Get.offAllNamed(AppRoutes.landing);
     } catch (e, stack) {
       logError('PIN setup error', e, stack);
       Get.snackbar(

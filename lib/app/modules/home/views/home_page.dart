@@ -1198,12 +1198,10 @@ class HomePage extends GetView<HomeController> {
     DeliveryOrder order,
   ) {
     return Obx(() {
-      final now = controller.currentTime.value;
       final statusLower = order.status.value.trim().toLowerCase();
       final isOutForDelivery = statusLower == 'out for delivery';
       final isDelivered = statusLower == 'delivered';
       final isLocked = isOutForDelivery && order.isLocked;
-      final isDeliveredCancelable = order.canCancelDelivered(now);
       final canSwipe = isOutForDelivery || isDelivered;
 
       if (!canSwipe) {
@@ -1228,14 +1226,24 @@ class HomePage extends GetView<HomeController> {
             hapticTriggered = false;
           }
         },
-        background: SwipeActionBackground(
-          progressListenable: swipeProgress,
-          isLocked: isLocked,
-          isDelivered: isDelivered,
-          isDeliveredCancelable: isDeliveredCancelable,
-        ),
+        background: isDelivered
+            ? Obx(() => SwipeActionBackground(
+                  progressListenable: swipeProgress,
+                  isLocked: isLocked,
+                  isDelivered: true,
+                  isDeliveredCancelable:
+                      order.canCancelDelivered(controller.currentTime.value),
+                ))
+            : SwipeActionBackground(
+                progressListenable: swipeProgress,
+                isLocked: isLocked,
+                isDelivered: false,
+                isDeliveredCancelable: false,
+              ),
         confirmDismiss: (_) async {
           if (isDelivered) {
+            final isDeliveredCancelable =
+                order.canCancelDelivered(DateTime.now().toUtc());
             if (isDeliveredCancelable) {
               final action = await _promptDeliveredSwipeActionDialog(
                 context,
@@ -2258,7 +2266,6 @@ class HomePage extends GetView<HomeController> {
       final isDelivered = order.status.value == 'Delivered';
       final isCancelled = order.status.value == 'Cancelled';
       final isLocked = order.isLocked && !isDelivered && !isCancelled;
-      final distanceBadge = order.formattedDistanceAway;
 
       final metaParts = <String>[
         if (order.routeSequence != null) '#${order.routeSequence}',
@@ -2431,8 +2438,14 @@ class HomePage extends GetView<HomeController> {
                             ),
                           ),
                         ),
-                        if (distanceBadge.isNotEmpty)
-                          Material(
+                        Obx(() {
+                          final distanceBadge =
+                              controller.liveDistanceLabels[order.id] ??
+                                  order.formattedDistanceAway;
+                          if (distanceBadge.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          return Material(
                             color: AppColors.primaryTint,
                             borderRadius: BorderRadius.circular(AppRadii.pill),
                             child: InkWell(
@@ -2473,7 +2486,8 @@ class HomePage extends GetView<HomeController> {
                                 ),
                               ),
                             ),
-                          ),
+                          );
+                        }),
                       ],
                     ),
                   ),
@@ -2827,19 +2841,28 @@ class HomePage extends GetView<HomeController> {
                 svgPath: 'assets/icons/resync-icon.svg',
                 label: 'Resync',
                 isPrimary: true,
-                onTap: () => controller.showSyncDialog(),
+                onTap: () {
+                  if (controller.isPostUnlockTouchGuardActive) return;
+                  controller.showSyncDialog();
+                },
               ),
               _buildBottomBarItem(
                 svgPath: 'assets/icons/endofday_icon.svg',
                 label: 'End of Day',
                 isPrimary: false,
-                onTap: () => Get.toNamed(AppRoutes.endOfDay),
+                onTap: () {
+                  if (controller.isPostUnlockTouchGuardActive) return;
+                  Get.toNamed(AppRoutes.endOfDay);
+                },
               ),
               _buildBottomBarItem(
                 svgPath: 'assets/icons/date-icon.svg',
                 label: 'Date',
                 isPrimary: false,
-                onTap: () => Get.toNamed(AppRoutes.routeCalendar),
+                onTap: () {
+                  if (controller.isPostUnlockTouchGuardActive) return;
+                  Get.toNamed(AppRoutes.routeCalendar);
+                },
               ),
             ],
           ),
