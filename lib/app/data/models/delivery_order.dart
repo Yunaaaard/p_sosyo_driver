@@ -35,6 +35,7 @@ class DeliveryOrder {
   final bool isEarlyPriority;
   final String? deliveryWindow;
   final String syncStatus;
+  final String createdAt;
 
   String get effectiveDeliveryWindow =>
       (deliveryWindow == 'early' ||
@@ -76,6 +77,7 @@ class DeliveryOrder {
     bool? isEarlyPriority,
     String? deliveryWindow,
     String? syncStatus,
+    String? createdAt,
   }) : transactionId = transactionId ?? id,
         custCode = custCode ?? '',
         storePhoto = storePhoto ?? '',
@@ -97,6 +99,9 @@ class DeliveryOrder {
         syncStatus = (syncStatus != null && syncStatus.trim().isNotEmpty)
             ? syncStatus.trim()
             : 'synced',
+        createdAt = (createdAt != null && createdAt.trim().isNotEmpty)
+            ? createdAt.trim()
+            : DateTime.now().toUtc().toIso8601String(),
         status = status.obs;
 
   /// Parsed UTC delivery completion timestamp for the 1-hour cancellation window.
@@ -190,6 +195,7 @@ class DeliveryOrder {
       isEarlyPriority: isEarlyPriority,
       deliveryWindow: deliveryWindow,
       syncStatus: syncStatus,
+      createdAt: createdAt,
     );
     return order;
   }
@@ -219,6 +225,7 @@ class DeliveryOrder {
     bool? isEarlyPriority,
     String? deliveryWindow,
     String? syncStatus,
+    String? createdAt,
   }) {
     return DeliveryOrder(
       id: id,
@@ -257,6 +264,7 @@ class DeliveryOrder {
       isEarlyPriority: isEarlyPriority ?? this.isEarlyPriority,
       deliveryWindow: deliveryWindow ?? this.deliveryWindow,
       syncStatus: syncStatus ?? this.syncStatus,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 
@@ -279,7 +287,9 @@ class DeliveryOrder {
       longitude: map['longitude'] != null ? double.tryParse(map['longitude'].toString()) : null,
       deliveredAt: map['delivered_at']?.toString(),
       paymentReference: map['payment_reference']?.toString(),
-      proofOfDeliveryPath: map['proof_of_delivery_path']?.toString(),
+      proofOfDeliveryPath: (map['s3_proof_of_delivery_path'] ??
+              map['proof_of_delivery_path'])
+          ?.toString(),
       cancellationReason: map['cancellation_reason']?.toString(),
       customerPhone: map['customer_phone']?.toString() ?? '',
       orderRemarks: map['order_remarks']?.toString() ?? '',
@@ -295,6 +305,7 @@ class DeliveryOrder {
       isEarlyPriority: (map['is_early_priority'] as num?)?.toInt() == 1,
       deliveryWindow: map['delivery_window']?.toString(),
       syncStatus: map['sync_status']?.toString() ?? 'synced',
+      createdAt: map['created_at']?.toString(),
     );
   }
 
@@ -322,7 +333,7 @@ class DeliveryOrder {
       'longitude': longitude,
       'delivered_at': deliveredAt,
       'payment_reference': paymentReference,
-      'proof_of_delivery_path': proofOfDeliveryPath,
+      's3_proof_of_delivery_path': proofOfDeliveryPath,
       'cancellation_reason': cancellationReason,
       'customer_phone': customerPhone,
       'order_remarks': orderRemarks,
@@ -338,6 +349,7 @@ class DeliveryOrder {
       'is_early_priority': isEarlyPriority ? 1 : 0,
       'delivery_window': deliveryWindow,
       'sync_status': syncStatus,
+      'created_at': createdAt,
     };
   }
 }

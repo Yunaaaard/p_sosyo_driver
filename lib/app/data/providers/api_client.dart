@@ -141,6 +141,70 @@ class ApiClient {
     }
   }
 
+  static Future<({bool success, String message, dynamic data})> postJson(
+    String endpoint,
+    Map<String, dynamic> body,
+  ) async {
+    try {
+      final dio = await getDio();
+      logSync('[POST] ${dio.options.baseUrl}$endpoint', tag: 'API HTTP');
+      final response = await dio.post<String>(
+        endpoint,
+        data: jsonEncode(body),
+        options: Options(
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          responseType: ResponseType.plain,
+        ),
+      );
+
+      final statusCode = response.statusCode ?? 0;
+      final raw = (response.data ?? '').replaceFirst('\uFEFF', '').trim();
+      logSync(
+        '[POST Response] $endpoint ($statusCode): ${raw.length > 300 ? '${raw.substring(0, 300)}...' : raw}',
+        tag: 'API HTTP',
+      );
+
+      if (statusCode == 200 || statusCode == 201) {
+        if (raw.toLowerCase() == 'true') {
+          return (success: true, message: 'Synced successfully.', data: true);
+        }
+        if (raw.toLowerCase() == 'false') {
+          return (success: false, message: 'Server returned false.', data: false);
+        }
+
+        final decoded = _tryDecodeJson(raw);
+        if (decoded is Map) {
+          final map = Map<String, dynamic>.from(decoded);
+          final ok = map['success'] == true ||
+              map['result'] == true ||
+              map['status'] == 1 ||
+              map['status']?.toString().toLowerCase() == 'success' ||
+              map['message']?.toString().toLowerCase() == 'success';
+          final msg = map['message']?.toString().trim().isNotEmpty == true
+              ? map['message'].toString()
+              : (ok ? 'Synced successfully.' : 'Server rejected payload.');
+          return (success: ok, message: msg, data: map);
+        }
+
+        if (raw.isNotEmpty && !raw.toLowerCase().contains('error')) {
+          return (success: true, message: 'Synced successfully.', data: raw);
+        }
+      }
+
+      return (
+        success: false,
+        message: 'Server returned status $statusCode.',
+        data: raw,
+      );
+    } catch (e, stack) {
+      logError('ApiClient POST Error on $endpoint', e, stack);
+      return (success: false, message: 'Network/API error: $e', data: null);
+    }
+  }
+
   static dynamic _tryDecodeJson(String raw) {
     try {
       return jsonDecode(raw);

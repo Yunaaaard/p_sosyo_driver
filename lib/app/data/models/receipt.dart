@@ -9,6 +9,7 @@ class Receipt {
   final String scannedAt;
   final String? customerName;
   final String? proofOfDeliveryPath;
+  final String createdAt;
 
   Receipt({
     this.id,
@@ -21,7 +22,11 @@ class Receipt {
     String? scannedAt,
     this.customerName,
     this.proofOfDeliveryPath,
-  }) : scannedAt = scannedAt ?? DateTime.now().toIso8601String();
+    String? createdAt,
+  }) : scannedAt = scannedAt ?? DateTime.now().toIso8601String(),
+       createdAt = (createdAt != null && createdAt.trim().isNotEmpty)
+           ? createdAt.trim()
+           : DateTime.now().toUtc().toIso8601String();
 
   /// Create a Receipt from a SQLite row map.
   factory Receipt.fromMap(Map<String, dynamic> map) {
@@ -35,7 +40,10 @@ class Receipt {
       date: map['date'] as String,
       scannedAt: map['scanned_at'] as String,
       customerName: map['customer_name']?.toString(),
-      proofOfDeliveryPath: map['proof_of_delivery_path']?.toString(),
+      proofOfDeliveryPath: (map['s3_proof_of_delivery_path'] ??
+              map['proof_of_delivery_path'])
+          ?.toString(),
+      createdAt: map['created_at']?.toString(),
     );
   }
 
@@ -51,7 +59,8 @@ class Receipt {
       'date': date,
       'scanned_at': scannedAt,
       'customer_name': customerName,
-      'proof_of_delivery_path': proofOfDeliveryPath,
+      's3_proof_of_delivery_path': proofOfDeliveryPath,
+      'created_at': createdAt,
     };
   }
 

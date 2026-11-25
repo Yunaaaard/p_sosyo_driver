@@ -8,6 +8,7 @@ class DeliveryAttempt {
   final bool smsSent;
   final String attemptedAt;
   final String? rescheduledDate;
+  final String createdAt;
 
   DeliveryAttempt({
     this.id,
@@ -18,7 +19,10 @@ class DeliveryAttempt {
     this.smsSent = false,
     required this.attemptedAt,
     this.rescheduledDate,
-  });
+    String? createdAt,
+  }) : createdAt = (createdAt != null && createdAt.trim().isNotEmpty)
+           ? createdAt.trim()
+           : DateTime.now().toUtc().toIso8601String();
 
   factory DeliveryAttempt.fromMap(Map<String, dynamic> map) {
     return DeliveryAttempt(
@@ -30,6 +34,7 @@ class DeliveryAttempt {
       smsSent: (map['sms_sent'] as num?)?.toInt() == 1,
       attemptedAt: map['attempted_at']?.toString() ?? '',
       rescheduledDate: map['rescheduled_date']?.toString(),
+      createdAt: map['created_at']?.toString(),
     );
   }
 
@@ -43,6 +48,7 @@ class DeliveryAttempt {
       'sms_sent': smsSent ? 1 : 0,
       'attempted_at': attemptedAt,
       'rescheduled_date': rescheduledDate,
+      'created_at': createdAt,
     };
   }
 }

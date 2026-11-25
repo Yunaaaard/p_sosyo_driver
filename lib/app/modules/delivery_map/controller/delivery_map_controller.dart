@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:get/get.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:p_sosyo_driver/app/core/constants/carto_config.dart';
 import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
 import 'package:p_sosyo_driver/app/core/utils/location_helper.dart';
 import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
@@ -35,10 +39,23 @@ class DeliveryMapController extends GetxController {
   final RxDouble routeDistanceKm = 0.0.obs;
   final RxInt routeDurationMinutes = 0.obs;
   final RxBool isRoadSnapped = true.obs;
+  final RxBool isFollowMode = false.obs;
+  final RxBool showTrafficOverlay = true.obs;
+  final RxInt trafficRefreshTick = 0.obs;
+  final RxDouble driverHeadingRad = 0.0.obs;
+  final RxList<RouteStep> routeSteps = <RouteStep>[].obs;
+  final Rxn<RouteStep> activeTurnStep = Rxn<RouteStep>();
+  final RxDouble distanceToNextTurnMeters = 0.0.obs;
+  final RxBool hasArrivedAtSelectedStore = false.obs;
+
+  static const double arrivalThresholdKm = 0.08; // ~80m geofence
+  final Set<String> _notifiedArrivalOrderIds = <String>{};
 
   late final String todayIso;
   late final DateTime todayPht;
   Timer? _gpsTicker;
+  Timer? _trafficRefreshTicker;
+  StreamSubscription<CompassEvent>? _compassSub;
   bool _mapReady = false;
 
   @override
@@ -51,6 +68,7 @@ class DeliveryMapController extends GetxController {
 
     LocationHelper.startLocationUpdates();
     _initData();
+    _startCompassListener();
 
     searchFocusNode.addListener(() {
       if (searchFocusNode.hasFocus) {
@@ -62,15 +80,47 @@ class DeliveryMapController extends GetxController {
       const Duration(seconds: 4),
       (_) => refreshDriverGps(recalculateRoute: false),
     );
+    _trafficRefreshTicker = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) {
+        if (CartoConfig.hasTomTomTrafficKey && showTrafficOverlay.value) {
+          trafficRefreshTick.value++;
+          logSync(
+            'Refreshed TomTom live traffic overlay (tick #${trafficRefreshTick.value})',
+            tag: 'TOMTOM_TRAFFIC',
+          );
+        }
+      },
+    );
   }
 
   @override
   void onClose() {
     _gpsTicker?.cancel();
+    _trafficRefreshTicker?.cancel();
+    _compassSub?.cancel();
     searchFocusNode.dispose();
     searchController.dispose();
     mapController.dispose();
     super.onClose();
+  }
+
+  void _startCompassListener() {
+    try {
+      _compassSub = FlutterCompass.events?.listen(
+        (event) {
+          final headingDeg = event.heading;
+          if (headingDeg == null || headingDeg.isNaN) return;
+          final nextRad = headingDeg * math.pi / 180.0;
+          if ((nextRad - driverHeadingRad.value).abs() >= 0.03) {
+            driverHeadingRad.value = nextRad;
+          }
+        },
+        onError: (_) {},
+      );
+    } catch (_) {
+      // Simulators or devices without a magnetometer fall back to GPS bearing
+    }
   }
 
   static String _toIsoDate(DateTime d) =>
@@ -117,6 +167,12 @@ class DeliveryMapController extends GetxController {
         endLat: coords.latitude,
         endLng: coords.longitude,
       );
+      if (movedKm >= 0.005) {
+        driverHeadingRad.value = _computeBearingRad(
+          driverLatLng.value,
+          LatLng(coords.latitude, coords.longitude),
+        );
+      }
       driverLatLng.value = LatLng(coords.latitude, coords.longitude);
 
       if (allOrders.isNotEmpty) {
@@ -138,6 +194,19 @@ class DeliveryMapController extends GetxController {
           }
         }
       }
+
+      if (isFollowMode.value && _mapReady) {
+        try {
+          final zoom = mapController.camera.zoom;
+          mapController.move(
+            driverLatLng.value,
+            zoom < 15.0 ? 16.0 : zoom,
+          );
+        } catch (_) {}
+      }
+
+      _evaluateArrivalGeofence();
+      _updateTurnGuidance();
 
       if (isRouteActive.value &&
           selectedOrder.value != null &&
@@ -244,7 +313,10 @@ class DeliveryMapController extends GetxController {
       routeDistanceKm.value = res.distanceKm;
       routeDurationMinutes.value = res.durationMinutes;
       isRoadSnapped.value = res.isRoadSnapped;
+      routeSteps.assignAll(res.steps);
       isRouteActive.value = true;
+      _updateTurnGuidance();
+      _evaluateArrivalGeofence();
     } catch (e, stack) {
       logError('Failed rebuilding OSRM route', e, stack);
     } finally {
@@ -254,10 +326,115 @@ class DeliveryMapController extends GetxController {
 
   void clearRoute() {
     routePolyline.clear();
+    routeSteps.clear();
+    activeTurnStep.value = null;
+    distanceToNextTurnMeters.value = 0.0;
     routeDistanceKm.value = 0.0;
     routeDurationMinutes.value = 0;
     isRoadSnapped.value = true;
     isRouteActive.value = false;
+    isFollowMode.value = false;
+  }
+
+  void toggleFollowMode() {
+    final next = !isFollowMode.value;
+    isFollowMode.value = next;
+    if (next && _mapReady) {
+      try {
+        mapController.move(driverLatLng.value, 16.0);
+      } catch (_) {}
+    }
+  }
+
+  void toggleTrafficOverlay() {
+    showTrafficOverlay.value = !showTrafficOverlay.value;
+  }
+
+  void pauseFollowModeOnGesture() {
+    if (isFollowMode.value) {
+      isFollowMode.value = false;
+    }
+  }
+
+  double _computeBearingRad(LatLng from, LatLng to) {
+    final lat1 = from.latitude * math.pi / 180.0;
+    final lat2 = to.latitude * math.pi / 180.0;
+    final dLng = (to.longitude - from.longitude) * math.pi / 180.0;
+    final y = math.sin(dLng) * math.cos(lat2);
+    final x = math.cos(lat1) * math.sin(lat2) -
+        math.sin(lat1) * math.cos(lat2) * math.cos(dLng);
+    return math.atan2(y, x);
+  }
+
+  void _updateTurnGuidance() {
+    if (!isRouteActive.value || routeSteps.isEmpty) {
+      activeTurnStep.value = null;
+      distanceToNextTurnMeters.value = 0.0;
+      return;
+    }
+
+    // Pick the first meaningful upcoming step > 20m away (skipping 'depart' if already moving)
+    final driver = driverLatLng.value;
+    RouteStep? chosen;
+    double chosenMeters = 0.0;
+
+    for (final step in routeSteps) {
+      final meters = LocationHelper.calculateDistanceKm(
+            startLat: driver.latitude,
+            startLng: driver.longitude,
+            endLat: step.location.latitude,
+            endLng: step.location.longitude,
+          ) *
+          1000.0;
+
+      if (step.maneuverType == 'depart' &&
+          routeSteps.length > 1 &&
+          meters < 35) {
+        continue;
+      }
+      if (meters > 18 || step.maneuverType == 'arrive') {
+        chosen = step;
+        chosenMeters = meters;
+        break;
+      }
+    }
+
+    chosen ??= routeSteps.last;
+    activeTurnStep.value = chosen;
+    distanceToNextTurnMeters.value = chosenMeters;
+  }
+
+  void _evaluateArrivalGeofence() {
+    final order = selectedOrder.value;
+    if (order == null ||
+        !LocationHelper.isValidCoordinate(order.latitude, order.longitude)) {
+      hasArrivedAtSelectedStore.value = false;
+      return;
+    }
+
+    final distKm = LocationHelper.calculateDistanceKm(
+      startLat: driverLatLng.value.latitude,
+      startLng: driverLatLng.value.longitude,
+      endLat: order.latitude!,
+      endLng: order.longitude!,
+    );
+    final arrived = distKm <= arrivalThresholdKm;
+    hasArrivedAtSelectedStore.value = arrived;
+
+    if (arrived && !_notifiedArrivalOrderIds.contains(order.id)) {
+      _notifiedArrivalOrderIds.add(order.id);
+      HapticFeedback.mediumImpact();
+      Get.snackbar(
+        'Arrived at Store',
+        'You are within ${(distKm * 1000).round()} m of ${order.storeName}.',
+        snackPosition: SnackPosition.TOP,
+        backgroundColor: const Color(0xFFE8F5E9),
+        colorText: const Color(0xFF15803D),
+        margin: const EdgeInsets.all(16),
+        borderRadius: 12,
+        duration: const Duration(seconds: 3),
+      );
+    }
   }
 
   /// Selects a store pin without auto-routing; driver taps "Route Here" manually.
@@ -265,6 +442,7 @@ class DeliveryMapController extends GetxController {
     if (order == null && selectedOrder.value == null) return;
     selectedOrder.value = order;
     clearRoute();
+    _evaluateArrivalGeofence();
 
     if (!_mapReady || order == null) return;
     if (LocationHelper.isValidCoordinate(order.latitude, order.longitude)) {
@@ -276,27 +454,18 @@ class DeliveryMapController extends GetxController {
     }
   }
 
-  /// Manually triggers OSRM road routing from live Driver GPS to [selectedOrder].
+  /// Manually triggers road routing from live Driver GPS to [selectedOrder]
+  /// and enables Follow Mode.
   Future<void> routeToSelectedOrder() async {
     final order = selectedOrder.value;
     if (order == null) return;
     await rebuildRoute();
+    isFollowMode.value = true;
 
     if (!_mapReady) return;
-    if (LocationHelper.isValidCoordinate(order.latitude, order.longitude)) {
-      try {
-        final bounds = LatLngBounds.fromPoints([
-          driverLatLng.value,
-          LatLng(order.latitude!, order.longitude!),
-        ]);
-        mapController.fitCamera(
-          CameraFit.bounds(
-            bounds: bounds,
-            padding: const EdgeInsets.fromLTRB(52, 165, 52, 230),
-          ),
-        );
-      } catch (_) {}
-    }
+    try {
+      mapController.move(driverLatLng.value, 16.0);
+    } catch (_) {}
   }
 
   Future<void> selectDate(String? dateIso) async {

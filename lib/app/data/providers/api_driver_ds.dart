@@ -37,5 +37,38 @@ class ApiDriverDs {
     logSync('Fetching Customers: $query', tag: 'API SYNC');
     return await ApiClient.getList(query);
   }
+
+  static Future<({bool success, String message, dynamic data})>
+      postDeliveryOrders({
+    required String distCode,
+    required String mdCode,
+    required String salesmanCode,
+    required String actionType,
+    required int transtat,
+    required Map<String, dynamic> deliveryOrder,
+    required List<Map<String, dynamic>> orderItems,
+    required List<Map<String, dynamic>> receipts,
+    required List<Map<String, dynamic>> deliveryAttempts,
+    Map<String, dynamic>? transactionPayload,
+  }) async {
+    final body = <String, dynamic>{
+      'distCode': distCode,
+      'mdCode': mdCode,
+      'salesmanCode': salesmanCode,
+      'action_type': actionType,
+      'transtat': transtat,
+      'delivery_order': deliveryOrder,
+      'order_items': orderItems,
+      'receipts': receipts,
+      'delivery_attempts': deliveryAttempts,
+      if (transactionPayload != null) 'transaction_payload': transactionPayload,
+    };
+
+    logSync(
+      'Posting delivery_order #${deliveryOrder['id']} ($actionType) to post_delivery_orders...',
+      tag: 'API SYNC',
+    );
+    return await ApiClient.postJson('post_delivery_orders', body);
+  }
 }
 

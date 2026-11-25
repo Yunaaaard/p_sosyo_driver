@@ -1,12 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:get/get.dart';
 import 'package:p_sosyo_driver/app/core/constants/app_constants.dart';
+import 'package:p_sosyo_driver/app/core/constants/s3_config.dart';
 import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
 import 'package:p_sosyo_driver/app/data/models/pending_transaction.dart';
+import 'package:p_sosyo_driver/app/data/providers/api_client.dart';
+import 'package:p_sosyo_driver/app/data/providers/api_driver_ds.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/data/services/driver_sync_service.dart';
+import 'package:p_sosyo_driver/app/data/services/s3_image_service.dart';
 
 /// Centralized transaction storage & offline queue manager modeled after
 /// Ravamate / SFAplus `TransactionServices`.
@@ -76,10 +81,13 @@ class TransactionServices extends GetxService {
     }
   }
 
-  /// Stores a transaction locally and queues it as `TranStat.pending` (`2`)
-  /// when offline, or `TranStat.success` (`0`) when online.
+  /// Stores a transaction locally and, when online, immediately posts the
+  /// order bundle (`delivery_orders`, `order_items`, `receipts`,
+  /// `delivery_attempts`) to `post_delivery_orders`.
   ///
-  /// Returns `true` if queued offline (`TranStat.pending`), `false` if online.
+  /// If offline or if the server POST fails, stores it with `TranStat.pending`
+  /// (`2`) so `getPendings()` retries it later.
+  /// Returns `true` if queued for later sync (`TranStat.pending`), `false` if synced.
   Future<bool> recordTransaction({
     required String orderId,
     required String storeName,
@@ -88,30 +96,64 @@ class TransactionServices extends GetxService {
     required String summary,
     Map<String, dynamic>? payload,
   }) async {
-    final queuedOffline =
-        await DatabaseService.to.queueOfflineTransactionIfDisconnected(
+    final online = await DatabaseService.to.hasInternetConnectivity();
+    if (online) {
+      final postRes = await _postOrderBundleToServer(
+        orderId: orderId,
+        actionType: actionType,
+        transtat: TranStat.success,
+        transactionPayload: payload,
+      );
+
+      if (postRes.success) {
+        await storeTransaction(
+          orderId: orderId,
+          storeName: storeName,
+          actionType: actionType,
+          amount: amount,
+          summary: summary,
+          transtat: TranStat.success,
+          payload: payload,
+        );
+        await DatabaseService.to.markOrderSynced(orderId);
+        logImportant(
+          'Synced online transaction #$orderId ($actionType) to post_delivery_orders (transtat=${TranStat.success})',
+          tag: 'TXN_SERVICE',
+        );
+        return false;
+      }
+
+      logWarning(
+        'Online POST to post_delivery_orders failed for #$orderId (${postRes.message}); queuing as pending.',
+        tag: 'TXN_SERVICE',
+      );
+      await storeTransaction(
+        orderId: orderId,
+        storeName: storeName,
+        actionType: actionType,
+        amount: amount,
+        summary: summary,
+        transtat: TranStat.pending,
+        payload: payload,
+        lastError: postRes.message,
+      );
+      return true;
+    }
+
+    await storeTransaction(
       orderId: orderId,
       storeName: storeName,
       actionType: actionType,
       amount: amount,
       summary: summary,
+      transtat: TranStat.pending,
       payload: payload,
     );
-
-    if (queuedOffline) {
-      logWarning(
-        'Stored offline transaction #$orderId ($actionType) with transtat=${TranStat.pending} (${TranStat.label(TranStat.pending)})',
-        tag: 'TXN_SERVICE',
-      );
-    } else {
-      logImportant(
-        'Stored online transaction #$orderId ($actionType) with transtat=${TranStat.success} (${TranStat.label(TranStat.success)})',
-        tag: 'TXN_SERVICE',
-      );
-    }
-
-    await refreshTransactions();
-    return queuedOffline;
+    logWarning(
+      'Offline: queued #$orderId ($actionType) with transtat=${TranStat.pending} (${TranStat.label(TranStat.pending)})',
+      tag: 'TXN_SERVICE',
+    );
+    return true;
   }
 
   /// Directly stores a transaction record with an explicit `TranStat` value.
@@ -192,48 +234,76 @@ class TransactionServices extends GetxService {
         'Processing ${pendingTransactions.length} pending transaction(s)...',
         tag: 'TXN_SERVICE',
       );
-      final result = await DriverSyncService.to.syncAdvanceOrders();
-      if (result.success) {
-        final count = pendingTransactions.length;
-        await DatabaseService.to.markAllPendingTransactionsSynced();
-        await refreshTransactions();
+      await _uploadPendingS3Images(pendingTransactions);
+
+      int syncedCount = 0;
+      String? lastError;
+      final queueSnapshot = pendingTransactions.toList();
+
+      for (final txn in queueSnapshot) {
+        final postRes = await _postOrderBundleToServer(
+          orderId: txn.orderId,
+          actionType: txn.actionType,
+          transtat: TranStat.success,
+          transactionPayload: txn.decodedPayload,
+        );
+
+        if (postRes.success) {
+          syncedCount++;
+          if (txn.id != null) {
+            await DatabaseService.to.updateTransactionStatus(
+              txn.id!,
+              transtat: TranStat.success,
+              status: 'synced',
+            );
+          }
+          await DatabaseService.to.markOrderSynced(txn.orderId);
+        } else {
+          lastError = postRes.message;
+          if (txn.id != null) {
+            final nextRetry = txn.retryCount + 1;
+            final nextTranStat = nextRetry >= maxRetryAttempts
+                ? TranStat.failed
+                : TranStat.pending;
+            final nextStatus =
+                nextTranStat == TranStat.failed ? 'failed' : 'pending';
+            await DatabaseService.to.updateTransactionStatus(
+              txn.id!,
+              transtat: nextTranStat,
+              status: nextStatus,
+              lastError: postRes.message,
+              incrementRetry: true,
+            );
+          }
+        }
+      }
+
+      if (syncedCount > 0) {
+        await DriverSyncService.to.syncAdvanceOrders();
+      }
+      await refreshTransactions();
+
+      if (syncedCount == queueSnapshot.length) {
         logImportant(
-          'TransactionServices synced $count pending transaction(s) (transtat=${TranStat.success})',
+          'TransactionServices synced $syncedCount pending transaction(s) to post_delivery_orders (transtat=${TranStat.success})',
           tag: 'TXN_SERVICE',
         );
         return (
           success: true,
-          syncedCount: count,
-          message: '$count offline transaction(s) synced with dispatch.',
+          syncedCount: syncedCount,
+          message: '$syncedCount offline transaction(s) synced with server.',
         );
       }
 
-      for (final txn in pendingTransactions) {
-        if (txn.id != null) {
-          final nextRetry = txn.retryCount + 1;
-          final nextTranStat = nextRetry >= maxRetryAttempts
-              ? TranStat.failed
-              : TranStat.pending;
-          final nextStatus =
-              nextTranStat == TranStat.failed ? 'failed' : 'pending';
-          await DatabaseService.to.updateTransactionStatus(
-            txn.id!,
-            transtat: nextTranStat,
-            status: nextStatus,
-            lastError: result.message,
-            incrementRetry: true,
-          );
-        }
-      }
-      await refreshTransactions();
       logWarning(
-        'Pending transaction processing paused: ${result.message}',
+        'Pending transaction processing partial/paused ($syncedCount/${queueSnapshot.length} synced): ${lastError ?? "Unknown error"}',
         tag: 'TXN_SERVICE',
       );
       return (
         success: false,
-        syncedCount: 0,
-        message: result.message,
+        syncedCount: syncedCount,
+        message: lastError ??
+            'Synced $syncedCount of ${queueSnapshot.length} transaction(s).',
       );
     } catch (e, stack) {
       logError('Error during TransactionServices.getPendings', e, stack);
@@ -244,6 +314,71 @@ class TransactionServices extends GetxService {
       );
     } finally {
       isProcessing.value = false;
+    }
+  }
+
+  /// Builds the full `delivery_orders` + `order_items` + `receipts` +
+  /// `delivery_attempts` payload from SQLite and posts it to `post_delivery_orders`.
+  Future<({bool success, String message, dynamic data})>
+      _postOrderBundleToServer({
+    required String orderId,
+    required String actionType,
+    required int transtat,
+    Map<String, dynamic>? transactionPayload,
+  }) async {
+    final distCode = await ApiClient.getDistCode();
+    final mdCode = await ApiClient.getDriverCode();
+    final salesmanCode = await ApiClient.getSalesmanCode();
+
+    final order = await DatabaseService.to.getDeliveryOrderById(orderId);
+    final items = await DatabaseService.to.getOrderItems(orderId);
+    final receipts = await DatabaseService.to.getReceipts(orderId);
+    final attempts = await DatabaseService.to.getDeliveryAttempts(orderId);
+
+    return ApiDriverDs.postDeliveryOrders(
+      distCode: distCode,
+      mdCode: mdCode,
+      salesmanCode: salesmanCode,
+      actionType: actionType,
+      transtat: transtat,
+      deliveryOrder: order?.toMap() ?? {'id': orderId},
+      orderItems: items.map((e) => e.toMap()).toList(),
+      receipts: receipts.map((r) => r.toMap()).toList(),
+      deliveryAttempts: attempts.map((a) => a.toMap()).toList(),
+      transactionPayload: transactionPayload,
+    );
+  }
+
+  /// Uploads any pending local POD `.jpg` photos to S3 when reprocessing the
+  /// offline queue.
+  Future<void> _uploadPendingS3Images(List<PendingTransaction> txns) async {
+    for (final txn in txns) {
+      if (txn.actionType != 'DELIVERED') continue;
+      final payload = txn.decodedPayload;
+      final localPod =
+          (payload['localPodPath'] ?? payload['proofOfDeliveryPath'] ?? '')
+              .toString()
+              .trim();
+      final existingPodUrl = (payload['podS3Url'] ?? '').toString().trim();
+
+      if (existingPodUrl.isEmpty &&
+          localPod.isNotEmpty &&
+          !localPod.startsWith('http') &&
+          await File(localPod).exists()) {
+        final res = await S3ImageService.to.uploadFilePath(
+          filePath: localPod,
+          baseFolder: S3Config.podBaseFolder,
+          customFilename:
+              'pod_${txn.orderId}_${DateTime.now().millisecondsSinceEpoch}',
+        );
+        if (res.isSuccess && res.url != null) {
+          await DatabaseService.to.updateDeliveryOrderStatus(
+            txn.orderId,
+            'Delivered',
+            proofOfDeliveryPath: res.url,
+          );
+        }
+      }
     }
   }
 }

@@ -1,9 +1,11 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:p_sosyo_driver/app/core/constants/app_constants.dart';
+import 'package:p_sosyo_driver/app/core/constants/carto_config.dart';
 import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'package:p_sosyo_driver/app/core/utils/location_helper.dart';
 import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
@@ -62,88 +64,166 @@ class DeliveryMapPage extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final orders = controller.filteredOrders;
-        final selected = controller.selectedOrder.value;
-        final driverPos = controller.driverLatLng.value;
-        final poly = controller.routePolyline.toList();
-        final isRoad = controller.isRoadSnapped.value;
+        final initialCenter = controller.driverLatLng.value;
 
         return Stack(
           children: [
-            // ── 1. OpenStreetMap Interactive Canvas ──
-            FlutterMap(
-              mapController: controller.mapController,
-              options: MapOptions(
-                initialCenter: driverPos,
-                initialZoom: 12.5,
-                onTap: (_, __) {
-                  controller.closeSearchDropdown();
-                  controller.selectOrderPin(null);
-                },
-                onMapReady: controller.onMapReady,
-              ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.p_sosyo_driver',
-                ),
-                if (poly.length >= 2)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: poly,
-                        strokeWidth: 7.5,
-                        color: Colors.white.withOpacity(0.92),
-                      ),
-                      Polyline(
-                        points: poly,
-                        strokeWidth: 4.5,
-                        color: isRoad
-                            ? const Color(0xFF2E6BFF)
-                            : AppColors.warning,
-                      ),
-                    ],
+            // ── 1. Interactive Map Canvas (Isolated from UI/search rebuilds) ──
+            RepaintBoundary(
+              child: FlutterMap(
+                mapController: controller.mapController,
+                options: MapOptions(
+                  initialCenter: initialCenter,
+                  initialZoom: 12.5,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
                   ),
-                MarkerLayer(
-                  markers: [
-                    // Store Delivery Pins (offsetting co-located pins & drawing selected last)
-                    ..._buildStoreMarkers(orders, selected, reduceMotion),
-                    // Live Driver Marker
-                    Marker(
-                      point: driverPos,
-                      width: 52,
-                      height: 52,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.surfaceDark,
-                            width: 2.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.surfaceDark.withOpacity(0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Image.asset(
-                          AppConstants.truck3dAsset,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Icon(
-                            Icons.local_shipping_rounded,
-                            color: AppColors.surfaceDark,
-                            size: 24,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  onTap: (_, __) {
+                    controller.closeSearchDropdown();
+                    controller.selectOrderPin(null);
+                  },
+                  onPositionChanged: (_, hasGesture) {
+                    if (hasGesture) {
+                      controller.pauseFollowModeOnGesture();
+                    }
+                  },
+                  onMapReady: controller.onMapReady,
                 ),
-              ],
+                children: [
+                  Obx(() {
+                    final showTraffic = CartoConfig.hasTomTomTrafficKey &&
+                        controller.showTrafficOverlay.value;
+                    return TileLayer(
+                      key: ValueKey(showTraffic ? 'basemap_nolabels' : 'basemap_full'),
+                      urlTemplate: showTraffic
+                          ? CartoConfig.noLabelsTileUrlTemplate
+                          : CartoConfig.tileUrlTemplate,
+                      subdomains: const ['a', 'b', 'c', 'd'],
+                      keepBuffer: 3,
+                      panBuffer: 1,
+                      userAgentPackageName: 'com.example.p_sosyo_driver',
+                    );
+                  }),
+                  Obx(() {
+                    if (!CartoConfig.hasTomTomTrafficKey ||
+                        !controller.showTrafficOverlay.value) {
+                      return const SizedBox.shrink();
+                    }
+                    final tick = controller.trafficRefreshTick.value;
+                    return Opacity(
+                      opacity: 0.82,
+                      child: TileLayer(
+                        key: ValueKey('traffic_layer_$tick'),
+                        urlTemplate:
+                            '${CartoConfig.tomtomTrafficTileUrlTemplate}&_t=$tick',
+                        tileProvider: NetworkTileProvider(),
+                        keepBuffer: 2,
+                        panBuffer: 1,
+                        userAgentPackageName: 'com.example.p_sosyo_driver',
+                      ),
+                    );
+                  }),
+                  Obx(() {
+                    if (!CartoConfig.hasTomTomTrafficKey ||
+                        !controller.showTrafficOverlay.value) {
+                      return const SizedBox.shrink();
+                    }
+                    return IgnorePointer(
+                      child: TileLayer(
+                        key: const ValueKey('basemap_only_labels'),
+                        urlTemplate: CartoConfig.onlyLabelsTileUrlTemplate,
+                        subdomains: const ['a', 'b', 'c', 'd'],
+                        keepBuffer: 3,
+                        panBuffer: 1,
+                        userAgentPackageName: 'com.example.p_sosyo_driver',
+                      ),
+                    );
+                  }),
+                  Obx(() {
+                    final poly = controller.routePolyline.toList();
+                    final isRoad = controller.isRoadSnapped.value;
+                    if (poly.length < 2) return const SizedBox.shrink();
+                    return PolylineLayer(
+                      simplificationTolerance: 0.4,
+                      polylines: [
+                        Polyline(
+                          points: poly,
+                          strokeWidth: 7.5,
+                          color: const Color(0xEBFFFFFF),
+                        ),
+                        Polyline(
+                          points: poly,
+                          strokeWidth: 4.5,
+                          color: isRoad
+                              ? const Color(0xFF2E6BFF)
+                              : AppColors.warning,
+                        ),
+                      ],
+                    );
+                  }),
+                  Obx(() {
+                    final orders = controller.filteredOrders;
+                    final selected = controller.selectedOrder.value;
+                    final driverPos = controller.driverLatLng.value;
+                    final headingRad = controller.driverHeadingRad.value;
+                    return MarkerLayer(
+                      rotate: false,
+                      markers: [
+                        ..._buildStoreMarkers(orders, selected, reduceMotion),
+                        Marker(
+                          key: const ValueKey('driver_marker'),
+                          point: driverPos,
+                          width: 104,
+                          height: 104,
+                          child: RepaintBoundary(
+                            child: Transform.rotate(
+                              angle: headingRad,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  const SizedBox(
+                                    width: 104,
+                                    height: 104,
+                                    child: CustomPaint(
+                                      painter: _HeadingGlowConePainter(),
+                                    ),
+                                  ),
+                                  Container(
+                                    width: 50,
+                                    height: 50,
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: controller.isFollowMode.value
+                                            ? AppColors.primary
+                                            : AppColors.surfaceDark,
+                                        width: 2.5,
+                                      ),
+                                      boxShadow: const [
+                                        BoxShadow(
+                                          color: Color(0x590E1B4D),
+                                          blurRadius: 8,
+                                          offset: Offset(0, 3),
+                                        ),
+                                      ],
+                                    ),
+                                    child: SvgPicture.asset(
+                                      AppConstants.truck3dAsset,
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }),
+                ],
+              ),
             ),
 
             // ── 2. Top Floating Telemetry & Date Picker Bar ──
@@ -151,38 +231,73 @@ class DeliveryMapPage extends StatelessWidget {
               top: AppSpacing.sm,
               left: AppSpacing.md,
               right: AppSpacing.md,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildTelemetryBanner(orders.length),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildDateFilterBar(context),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildCustomerSearchBar(context, orders),
-                ],
-              ),
+              child: Obx(() {
+                final orders = controller.filteredOrders;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildTelemetryBanner(orders.length),
+                    if (controller.isRouteActive.value &&
+                        controller.activeTurnStep.value != null) ...[
+                      const SizedBox(height: 6),
+                      _buildTurnGuidanceBanner(),
+                    ],
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildDateFilterBar(context),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildCustomerSearchBar(context, orders),
+                  ],
+                );
+              }),
             ),
 
             // ── 3. Floating Right Map Controls ──
-            Positioned(
-              right: AppSpacing.md,
-              bottom: selected != null ? 215 : 138,
-              child: Column(
-                children: [
-                  _MapFloatingButton(
-                    icon: Icons.fit_screen_rounded,
-                    tooltip: 'Fit All Pins',
-                    onTap: controller.fitAllMarkers,
-                  ),
-                  const SizedBox(height: 8),
-                  _MapFloatingButton(
-                    icon: Icons.my_location_rounded,
-                    tooltip: 'Center on My GPS',
-                    onTap: controller.recenterOnDriver,
-                  ),
-                ],
-              ),
-            ),
+            Obx(() {
+              final hasSelected = controller.selectedOrder.value != null;
+              final isFollowing = controller.isFollowMode.value;
+              final trafficOn = controller.showTrafficOverlay.value;
+              return Positioned(
+                right: AppSpacing.md,
+                bottom: hasSelected ? 225 : 138,
+                child: Column(
+                  children: [
+                    if (CartoConfig.hasTomTomTrafficKey) ...[
+                      _MapFloatingButton(
+                        icon: Icons.traffic_rounded,
+                        tooltip: trafficOn
+                            ? 'Hide Live Traffic'
+                            : 'Show Live Traffic',
+                        isActive: trafficOn,
+                        onTap: controller.toggleTrafficOverlay,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    _MapFloatingButton(
+                      icon: isFollowing
+                          ? Icons.navigation_rounded
+                          : Icons.navigation_outlined,
+                      tooltip: isFollowing
+                          ? 'Following Truck (Tap to Pause)'
+                          : 'Follow Truck',
+                      isActive: isFollowing,
+                      onTap: controller.toggleFollowMode,
+                    ),
+                    const SizedBox(height: 8),
+                    _MapFloatingButton(
+                      icon: Icons.fit_screen_rounded,
+                      tooltip: 'Fit All Pins',
+                      onTap: controller.fitAllMarkers,
+                    ),
+                    const SizedBox(height: 8),
+                    _MapFloatingButton(
+                      icon: Icons.my_location_rounded,
+                      tooltip: 'Center on My GPS',
+                      onTap: controller.recenterOnDriver,
+                    ),
+                  ],
+                ),
+              );
+            }),
 
             // ── 4. Animated Bottom Stop Card ──
             Positioned(
@@ -191,24 +306,28 @@ class DeliveryMapPage extends StatelessWidget {
               bottom: AppSpacing.md,
               child: SafeArea(
                 top: false,
-                child: AnimatedSwitcher(
-                  duration: reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 240),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, anim) => FadeTransition(
-                    opacity: anim,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.08),
-                        end: Offset.zero,
-                      ).animate(anim),
-                      child: child,
+                child: Obx(() {
+                  final selected = controller.selectedOrder.value;
+                  final orders = controller.filteredOrders;
+                  return AnimatedSwitcher(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 240),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, anim) => FadeTransition(
+                      opacity: anim,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.08),
+                          end: Offset.zero,
+                        ).animate(anim),
+                        child: child,
+                      ),
                     ),
-                  ),
-                  child: _buildBottomCard(selected, orders),
-                ),
+                    child: _buildBottomCard(selected, orders),
+                  );
+                }),
               ),
             ),
           ],
@@ -506,24 +625,27 @@ class DeliveryMapPage extends StatelessWidget {
       built.add((
         isSelected: isSelected,
         marker: Marker(
+          key: ValueKey('pin_${order.id}'),
           point: point,
           width: 52,
           height: 52,
-          child: GestureDetector(
-            onTap: () => controller.selectOrderPin(order),
-            child: AnimatedScale(
-              scale: isSelected ? 1.22 : 1.0,
-              duration: reduceMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              child: _StoreMapMarker(
-                isDelivered: isDelivered,
-                isCancelled: isCancelled,
-                isLocked: isLocked,
-                isSelected: isSelected,
-                sequenceNumber: pinNum,
-                activeColor: dayColor,
+          child: RepaintBoundary(
+            child: GestureDetector(
+              onTap: () => controller.selectOrderPin(order),
+              child: AnimatedScale(
+                scale: isSelected ? 1.22 : 1.0,
+                duration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                child: _StoreMapMarker(
+                  isDelivered: isDelivered,
+                  isCancelled: isCancelled,
+                  isLocked: isLocked,
+                  isSelected: isSelected,
+                  sequenceNumber: pinNum,
+                  activeColor: dayColor,
+                ),
               ),
             ),
           ),
@@ -616,6 +738,85 @@ class DeliveryMapPage extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTurnGuidanceBanner() {
+    final step = controller.activeTurnStep.value;
+    if (step == null) return const SizedBox.shrink();
+
+    final meters = controller.distanceToNextTurnMeters.value;
+    final distText = meters >= 1000
+        ? '${(meters / 1000.0).toStringAsFixed(1)} km'
+        : '${meters.round()} m';
+
+    final IconData turnIcon = switch (step.maneuverType) {
+      'arrive' => Icons.flag_rounded,
+      'roundabout' || 'rotary' => Icons.roundabout_right_rounded,
+      _ => step.modifier.contains('left')
+          ? Icons.turn_left_rounded
+          : step.modifier.contains('right')
+              ? Icons.turn_right_rounded
+              : Icons.straight_rounded,
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x331E3A8A),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(turnIcon, color: Colors.white, size: 19),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              step.instruction,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.label.copyWith(
+                fontSize: 13.5,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.22),
+              borderRadius: BorderRadius.circular(AppRadii.pill),
+            ),
+            child: Text(
+              distText,
+              style: AppTypography.monoRef.copyWith(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -858,10 +1059,12 @@ class DeliveryMapPage extends StatelessWidget {
     List<DeliveryOrder> orders,
   ) {
     if (selected != null) {
+      final hasArrived = controller.hasArrivedAtSelectedStore.value;
       return SurfaceCard(
         key: ValueKey('map_selected_${selected.id}'),
         padding: const EdgeInsets.all(AppSpacing.md),
-        borderColor: AppColors.primaryBorder,
+        borderColor:
+            hasArrived ? AppColors.successBorder : AppColors.primaryBorder,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -924,6 +1127,36 @@ class DeliveryMapPage extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
+                if (controller.hasArrivedAtSelectedStore.value) ...[
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.successTint,
+                      borderRadius: BorderRadius.circular(AppRadii.pill),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          size: 12,
+                          color: AppColors.success,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Arrived',
+                          style: AppTypography.monoRef.copyWith(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.success,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1036,7 +1269,9 @@ class DeliveryMapPage extends StatelessWidget {
                       arguments: selected,
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: controller.hasArrivedAtSelectedStore.value
+                          ? AppColors.success
+                          : AppColors.primary,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 9),
@@ -1045,7 +1280,9 @@ class DeliveryMapPage extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      'View Order',
+                      controller.hasArrivedAtSelectedStore.value
+                          ? 'Start Delivery'
+                          : 'View Order',
                       style: AppTypography.label.copyWith(
                         fontSize: 12.5,
                         color: Colors.white,
@@ -1154,9 +1391,6 @@ class _StoreMapMarker extends StatelessWidget {
     this.activeColor,
   });
 
-  static const String _shopIconUrl =
-      'https://img.icons8.com/3d-fluency/94/shop.png';
-
   final bool isDelivered;
   final bool isCancelled;
   final bool isLocked;
@@ -1198,16 +1432,11 @@ class _StoreMapMarker extends StatelessWidget {
             ],
           ),
           child: ClipOval(
-            child: Image.network(
-              _shopIconUrl,
+            child: SvgPicture.asset(
+              AppConstants.shopIconAsset,
               width: 34,
               height: 34,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => Icon(
-                Icons.storefront_rounded,
-                color: badgeColor,
-                size: 22,
-              ),
             ),
           ),
         ),
@@ -1313,18 +1542,20 @@ class _MapFloatingButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onTap,
+    this.isActive = false,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: AppColors.surface,
+        color: isActive ? AppColors.primary : AppColors.surface,
         elevation: 3,
         shadowColor: AppColors.surfaceDark.withOpacity(0.18),
         shape: const CircleBorder(),
@@ -1336,9 +1567,15 @@ class _MapFloatingButton extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.border),
+              border: Border.all(
+                color: isActive ? AppColors.primary : AppColors.border,
+              ),
             ),
-            child: Icon(icon, color: AppColors.primary, size: 21),
+            child: Icon(
+              icon,
+              color: isActive ? Colors.white : AppColors.primary,
+              size: 21,
+            ),
           ),
         ),
       ),
@@ -1397,4 +1634,46 @@ class _MapTipRow extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Google Maps–style directional heading cone glow pointing toward the
+/// driver's current travel bearing.
+class _HeadingGlowConePainter extends CustomPainter {
+  const _HeadingGlowConePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+
+    // Soft ambient blue halo around the truck
+    final haloPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          AppColors.primary.withOpacity(0.26),
+          AppColors.primary.withOpacity(0.0),
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: radius * 0.72));
+    canvas.drawCircle(center, radius * 0.72, haloPaint);
+
+    // Directional 76-degree cone pointing "up" (-pi/2); rotated by Transform.rotate
+    const double sweepAngle = 76 * math.pi / 180;
+    const double startAngle = -math.pi / 2 - sweepAngle / 2;
+    final coneRect = Rect.fromCircle(center: center, radius: radius);
+
+    final conePaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          const Color(0xFF3B82F6).withOpacity(0.48),
+          const Color(0xFF3B82F6).withOpacity(0.18),
+          const Color(0xFF3B82F6).withOpacity(0.0),
+        ],
+        stops: const [0.18, 0.58, 1.0],
+      ).createShader(coneRect);
+
+    canvas.drawArc(coneRect, startAngle, sweepAngle, true, conePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _HeadingGlowConePainter oldDelegate) => false;
 }

@@ -41,7 +41,7 @@ class DatabaseService extends GetxService {
     await _ensureColumnExists('delivery_orders', 'store_photo', 'TEXT');
     await _ensureColumnExists('delivery_orders', 'delivered_at', 'TEXT');
     await _ensureColumnExists('delivery_orders', 'payment_reference', 'TEXT');
-    await _ensureColumnExists('delivery_orders', 'proof_of_delivery_path', 'TEXT');
+    await _ensureColumnExists('delivery_orders', 's3_proof_of_delivery_path', 'TEXT');
     await _ensureColumnExists('delivery_orders', 'cancellation_reason', 'TEXT');
     await _ensureColumnExists('delivery_orders', 'customer_phone', 'TEXT');
     await _ensureColumnExists('delivery_orders', 'order_remarks', 'TEXT');
@@ -57,12 +57,14 @@ class DatabaseService extends GetxService {
     await _ensureColumnExists('delivery_orders', 'is_early_priority', 'INTEGER DEFAULT 0');
     await _ensureColumnExists('delivery_orders', 'delivery_window', "TEXT DEFAULT 'normal'");
     await _ensureColumnExists('delivery_orders', 'sync_status', "TEXT DEFAULT 'synced'");
+    await _ensureColumnExists('delivery_orders', 'created_at', 'TEXT');
     await _ensureColumnExists('order_items', 'category', 'TEXT');
     await _ensureColumnExists('order_items', 'adjustment_reason', 'TEXT');
     await _ensureColumnExists('pending_transactions', 'transtat', 'INTEGER DEFAULT 2');
     await _ensureColumnExists('order_items', 'original_qty', 'INTEGER');
     await _ensureColumnExists('receipts', 'customer_name', 'TEXT');
-    await _ensureColumnExists('receipts', 'proof_of_delivery_path', 'TEXT');
+    await _ensureColumnExists('receipts', 's3_proof_of_delivery_path', 'TEXT');
+    await _ensureColumnExists('receipts', 'created_at', 'TEXT');
 
     await _db.execute('''
       CREATE TABLE IF NOT EXISTS delivery_attempts (
@@ -73,10 +75,12 @@ class DatabaseService extends GetxService {
         remarks TEXT,
         sms_sent INTEGER NOT NULL DEFAULT 0,
         attempted_at TEXT NOT NULL,
-        rescheduled_date TEXT
+        rescheduled_date TEXT,
+        created_at TEXT
       )
     ''');
     await _ensureColumnExists('delivery_attempts', 'rescheduled_date', 'TEXT');
+    await _ensureColumnExists('delivery_attempts', 'created_at', 'TEXT');
 
     await _db.execute('''
       CREATE TABLE IF NOT EXISTS pending_transactions (
@@ -173,7 +177,7 @@ class DatabaseService extends GetxService {
         longitude REAL,
         delivered_at TEXT,
         payment_reference TEXT,
-        proof_of_delivery_path TEXT,
+        s3_proof_of_delivery_path TEXT,
         cancellation_reason TEXT,
         customer_phone TEXT,
         order_remarks TEXT,
@@ -188,7 +192,8 @@ class DatabaseService extends GetxService {
         payment_method TEXT NOT NULL DEFAULT 'Cash',
         is_early_priority INTEGER NOT NULL DEFAULT 0,
         delivery_window TEXT NOT NULL DEFAULT 'normal',
-        sync_status TEXT NOT NULL DEFAULT 'synced'
+        sync_status TEXT NOT NULL DEFAULT 'synced',
+        created_at TEXT
       )
     ''');
 
@@ -220,7 +225,8 @@ class DatabaseService extends GetxService {
         date TEXT NOT NULL,
         scanned_at TEXT NOT NULL,
         customer_name TEXT,
-        proof_of_delivery_path TEXT
+        s3_proof_of_delivery_path TEXT,
+        created_at TEXT
       )
     ''');
 
@@ -460,6 +466,26 @@ class DatabaseService extends GetxService {
     return results.map((map) => DeliveryOrder.fromMap(map)).toList();
   }
 
+  Future<DeliveryOrder?> getDeliveryOrderById(String orderId) async {
+    final results = await _db.query(
+      'delivery_orders',
+      where: 'id = ? OR transaction_id = ?',
+      whereArgs: [orderId, orderId],
+      limit: 1,
+    );
+    if (results.isEmpty) return null;
+    return DeliveryOrder.fromMap(results.first);
+  }
+
+  Future<void> markOrderSynced(String orderId) async {
+    await _db.update(
+      'delivery_orders',
+      {'sync_status': 'synced'},
+      where: 'id = ? OR transaction_id = ?',
+      whereArgs: [orderId, orderId],
+    );
+  }
+
   Future<void> saveDeliveryOrdersBatch(List<DeliveryOrder> orders) async {
     final batch = _db.batch();
     // Preserve completed/cancelled history from previous dates while replacing active manifest
@@ -499,7 +525,7 @@ class DatabaseService extends GetxService {
       }
     }
     if (proofOfDeliveryPath != null) {
-      updates['proof_of_delivery_path'] = proofOfDeliveryPath;
+      updates['s3_proof_of_delivery_path'] = proofOfDeliveryPath;
     }
     if (cancellationReason != null) {
       updates['cancellation_reason'] = cancellationReason;

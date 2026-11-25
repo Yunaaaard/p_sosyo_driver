@@ -336,6 +336,7 @@ class HomeController extends GetxController {
     String orderId, {
     String? paymentReference,
     String? proofOfDeliveryPath,
+    Map<String, dynamic>? extraPayload,
   }) async {
     final index = orders.indexWhere(
         (order) => order.id == orderId || order.transactionId == orderId);
@@ -382,6 +383,7 @@ class HomeController extends GetxController {
           'deliveredAt': nowIso,
           'paymentReference': cleanRef,
           'proofOfDeliveryPath': cleanPod,
+          if (extraPayload != null) ...extraPayload,
         },
       );
       await refreshPendingOfflineCount();

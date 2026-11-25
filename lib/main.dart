@@ -5,6 +5,7 @@ import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'package:p_sosyo_driver/app/data/services/bluetooth_printer_service.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
 import 'package:p_sosyo_driver/app/data/services/driver_sync_service.dart';
+import 'package:p_sosyo_driver/app/data/services/s3_image_service.dart';
 import 'package:p_sosyo_driver/app/data/services/scanner_service.dart';
 import 'package:p_sosyo_driver/app/data/services/sms_service.dart';
 import 'package:p_sosyo_driver/app/data/services/transaction_services.dart';
@@ -26,6 +27,7 @@ void main() async {
   Get.put(DriverSyncService());
   Get.put(BluetoothPrinterService());
   Get.put(SmsService());
+  Get.put(S3ImageService());
   Get.put(TransactionServices());
 
   final initialRoute = await _resolveInitialRoute();

@@ -20,12 +20,13 @@ class AppConstants {
   static const String endOfDayIconAsset = 'assets/icons/endofday_icon.svg';
   static const String dateIconAsset = 'assets/icons/date-icon.svg';
   static const String skuIconAsset = 'assets/icons/sku-icon.svg';
+  static const String shopIconAsset = 'assets/icons/shop.svg';
+  static const String truck3dAsset = 'assets/icons/truck_3d.svg';
 
   static const String loginLogoAsset = 'assets/images/psosyo_login_logo.png';
   static const String driverLogoAsset = 'assets/images/psosyo_driver_logo.png';
   static const String backgroundAsset = 'assets/images/psosyo_background.png';
   static const String shopThumbnailAsset = 'assets/images/shop_thumbnail.png';
-  static const String truck3dAsset = 'assets/images/truck_3d.png';
 
   // Durations
   static const Duration adminHoldDuration = Duration(milliseconds: 1500);

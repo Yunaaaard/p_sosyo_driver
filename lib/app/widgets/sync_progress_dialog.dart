@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
+import 'package:p_sosyo_driver/app/core/constants/app_constants.dart';
 import 'package:p_sosyo_driver/app/core/themes/theme_colors.dart';
 import 'package:p_sosyo_driver/app/modules/home/controller/home_controller.dart';
 import 'package:p_sosyo_driver/app/widgets/custom_button.dart';
@@ -358,26 +360,11 @@ class _SyncProgressDialogState extends State<SyncProgressDialog>
                         child: SizedBox(
                           width: 44,
                           height: 44,
-                          child: Image.asset(
-                            'assets/images/truck_3d.png',
+                          child: SvgPicture.asset(
+                            AppConstants.truck3dAsset,
                             width: 44,
                             height: 44,
                             fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: isCompleted
-                                    ? AppColors.success
-                                    : AppColors.primary,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(
-                                Icons.local_shipping_outlined,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
                           ),
                         ),
                       );

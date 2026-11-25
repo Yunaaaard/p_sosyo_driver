@@ -31,9 +31,22 @@ class DeliverySummaryPage extends StatelessWidget {
         ? (args['items'] as List<OrderItem>)
         : <OrderItem>[];
 
+    final bool autoPrint = args['autoPrint'] == true;
     final printerService = BluetoothPrinterService.to;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      printerService.refreshConnectionStatus();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await printerService.refreshConnectionStatus();
+      if (!autoPrint) return;
+      if (Get.arguments is Map) {
+        (Get.arguments as Map)['autoPrint'] = false;
+      }
+      await _autoPrintAfterDelivery(
+        printerService: printerService,
+        customerName: customerName,
+        referenceNumber: referenceNumber,
+        date: date,
+        totalAmount: totalAmount,
+        items: orderedItems,
+      );
     });
 
     return PopScope(
@@ -337,6 +350,50 @@ class DeliverySummaryPage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _autoPrintAfterDelivery({
+    required BluetoothPrinterService printerService,
+    required String customerName,
+    required String referenceNumber,
+    required String date,
+    required String totalAmount,
+    required List<OrderItem> items,
+  }) async {
+    if (printerService.isPrinting.value) return;
+    final ready = await printerService.ensureConnected();
+    if (!ready) {
+      Get.snackbar(
+        'Printer Not Connected',
+        'Order tagged as delivered. Connect a Bluetooth printer and tap Print Receipt to reprint.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: AppColors.warningTint,
+        colorText: AppColors.warning,
+        margin: const EdgeInsets.all(16),
+        borderRadius: 12,
+      );
+      return;
+    }
+
+    final printed = await printerService.printDeliveryReceipt(
+      customerName: customerName,
+      referenceNumber: referenceNumber,
+      date: date,
+      totalAmount: totalAmount,
+      items: items,
+    );
+
+    Get.snackbar(
+      printed ? 'Receipt Auto-Printed' : 'Auto-Print Failed',
+      printed
+          ? 'Delivery receipt sent automatically to thermal printer.'
+          : 'Could not auto-print. Check Bluetooth printer paper and tap Print Receipt.',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: printed ? AppColors.successTint : AppColors.dangerTint,
+      colorText: printed ? AppColors.success : AppColors.danger,
+      margin: const EdgeInsets.all(16),
+      borderRadius: 12,
     );
   }
 

@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:p_sosyo_driver/app/core/constants/s3_config.dart';
 import 'package:p_sosyo_driver/app/core/utils/app_logger.dart';
 import 'package:p_sosyo_driver/app/core/utils/paqner_qr_codec.dart';
 import 'package:p_sosyo_driver/app/core/utils/peso_formatter.dart';
@@ -12,6 +13,7 @@ import 'package:p_sosyo_driver/app/data/models/delivery_order.dart';
 import 'package:p_sosyo_driver/app/data/models/order_item.dart';
 import 'package:p_sosyo_driver/app/data/models/receipt.dart';
 import 'package:p_sosyo_driver/app/data/services/database_service.dart';
+import 'package:p_sosyo_driver/app/data/services/s3_image_service.dart';
 import 'package:p_sosyo_driver/app/data/services/scanner_service.dart';
 import 'package:p_sosyo_driver/app/modules/home/controller/home_controller.dart';
 import 'package:p_sosyo_driver/app/routes/app_routes.dart';
@@ -375,11 +377,13 @@ class ReceiptDetailsController extends GetxController {
       final fileName =
           'POD_${safeOrderId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final savedPath = p.join(podDir.path, fileName);
-      await File(picked.path).copy(savedPath);
+      final rawBytes = await File(picked.path).readAsBytes();
+      final jpegBytes = await S3ImageService.to.ensureJpegBytes(rawBytes);
+      await File(savedPath).writeAsBytes(jpegBytes);
 
       proofOfDeliveryPath.value = savedPath;
       logImportant(
-        'Saved local Proof of Delivery: $savedPath',
+        'Saved local Proof of Delivery (.jpg): $savedPath',
         tag: 'POD',
       );
     } catch (e, stack) {
@@ -443,12 +447,33 @@ class ReceiptDetailsController extends GetxController {
     final customerName = order?.storeName ?? 'Customer';
     final localPodPath = proofOfDeliveryPath.value.trim();
 
+    String effectivePodPath = localPodPath;
+    String? podS3Url;
+
+    final isOnline = await DatabaseService.to.hasInternetConnectivity();
+    if (isOnline && localPodPath.isNotEmpty) {
+      final podUpload = await S3ImageService.to.uploadFilePath(
+        filePath: localPodPath,
+        baseFolder: S3Config.podBaseFolder,
+        customFilename:
+            'pod_${targetOrderId}_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      if (podUpload.isSuccess && podUpload.url != null) {
+        podS3Url = podUpload.url;
+        effectivePodPath = podS3Url!;
+      }
+    }
+
     try {
       final HomeController homeController = Get.find<HomeController>();
       await homeController.markOrderAsDelivered(
         targetOrderId,
         paymentReference: scannedRef,
-        proofOfDeliveryPath: localPodPath,
+        proofOfDeliveryPath: effectivePodPath,
+        extraPayload: {
+          'localPodPath': localPodPath,
+          if (podS3Url != null) 'podS3Url': podS3Url,
+        },
       );
     } catch (e, stack) {
       logError('Error accessing HomeController to mark delivered', e, stack);
@@ -468,7 +493,8 @@ class ReceiptDetailsController extends GetxController {
           date: date.value,
           scannedAt: DateTime.now().toIso8601String(),
           customerName: customerName,
-          proofOfDeliveryPath: localPodPath.isNotEmpty ? localPodPath : null,
+          proofOfDeliveryPath:
+              effectivePodPath.isNotEmpty ? effectivePodPath : null,
         ),
       );
       logImportant('Saved receipt record for delivery order #$targetOrderId');
@@ -489,7 +515,7 @@ class ReceiptDetailsController extends GetxController {
       logError('Error loading order items for delivery summary', e, stack);
     }
 
-    // No confirmation modal — navigate directly to the Delivery Order Summary & Print screen
+    // Navigate directly to Delivery Order Summary and auto-print receipt
     Get.offNamed(
       AppRoutes.deliverySummary,
       arguments: <String, dynamic>{
@@ -498,7 +524,9 @@ class ReceiptDetailsController extends GetxController {
         'customerName': customerName,
         'referenceNumber': targetOrderId,
         'proofOfDeliveryPath': localPodPath,
+        'podS3Url': podS3Url,
         'items': orderedItems,
+        'autoPrint': true,
       },
     );
   }
